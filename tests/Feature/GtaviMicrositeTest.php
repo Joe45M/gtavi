@@ -199,7 +199,7 @@ final class GtaviMicrositeTest extends TestCase
     {
         $posts = $this->getJson('/api/v1/posts');
         $posts->assertOk();
-        $posts->assertJsonCount(6, 'data');
+        $posts->assertJsonCount(10, 'data');
 
         $single = $this->getJson('/api/v1/posts/gta-vi-price-editions-guide-standard-deluxe-collector');
         $single->assertOk();
@@ -371,6 +371,67 @@ final class GtaviMicrositeTest extends TestCase
             $path = public_path($asset);
             $this->assertFileExists($path);
             $this->assertGreaterThan(0, filesize($path));
+        }
+    }
+
+    public function test_ten_migrated_seo_articles_are_published_authored_by_joe_and_interlinked(): void
+    {
+        $migratedSlugs = [
+            'gta-vi-lucia-and-jason-dual-protagonist-switching-heist',
+            'gta-vi-vice-city-metro-transit-airport-fast-travel-map-routes',
+            'gta-vi-ps5-pro-60-fps-pssr-upscaling-vs-base-ps5-xbox-series-x',
+            'gta-vi-online-2-release-window-64-player-lobbies-rp-servers',
+            'gta-vi-100-price-rumor-debunked-take-two-strategy',
+            'gta-vi-enterable-buildings-70-percent-rumor-leonida',
+            'gta-vi-police-ai-6-star-wanted-system-cctv-escape',
+            'gta-vi-hidden-details-11-secrets-in-leonida-footage',
+            'xbox-series-s-gta-vi-performance-warning-1080p-cutbacks-exposed',
+            'secret-gta-vi-map-zone-bermuda-triangle-kalaga-mysteries',
+        ];
+
+        $existingSeededSlugs = [
+            'gta-vi-download-size-pre-load-math-ssd-guide',
+            'gta-vi-price-editions-guide-standard-deluxe-collector',
+            'leonida-map-size-vs-gta-v-los-santos-biomes',
+            'rage-9-engine-analysis-ray-tracing-water-physics',
+            'gta-vi-release-date-timeline-take-two-filings',
+            'projected-gta-vi-pc-requirements-vram-cpu-dlss',
+        ];
+
+        foreach ($migratedSlugs as $slug) {
+            $post = Post::query()->where('slug', $slug)->firstOrFail();
+
+            $this->assertSame('published', $post->status);
+            $this->assertSame('joe', $post->author_name);
+            $this->assertGreaterThanOrEqual(800, $post->word_count);
+            $this->assertGreaterThanOrEqual(95, $post->seo_score);
+            $this->assertGreaterThanOrEqual(85, $post->readability_score);
+            $this->assertNotEmpty($post->meta_title);
+            $this->assertNotEmpty($post->meta_description);
+            $this->assertNotEmpty($post->faq_items);
+
+            $html = (string) $post->rendered_html;
+            $this->assertStringContainsString(
+                '/gta/take-two-gta-vi-guidance-reaffirmed-8-billion-target',
+                $html
+            );
+
+            preg_match_all('/href="[^"]*\/gta\/([a-z0-9-]+)"/', $html, $matches);
+            $linkedSlugs = array_values(array_unique($matches[1]));
+
+            $siblingLinks = array_values(array_intersect(
+                $linkedSlugs,
+                array_values(array_diff($migratedSlugs, [$slug]))
+            ));
+            $this->assertNotEmpty($siblingLinks, "Article {$slug} must interlink to at least one sibling migrated article.");
+
+            $existingLinks = array_values(array_intersect($linkedSlugs, $existingSeededSlugs));
+            $this->assertNotEmpty($existingLinks, "Article {$slug} must interlink to at least one existing seeded article.");
+
+            $response = $this->get('/gta/'.$slug);
+            $response->assertOk();
+            $response->assertSee($post->title);
+            $response->assertSee('joe');
         }
     }
 }
