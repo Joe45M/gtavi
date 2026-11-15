@@ -35,7 +35,7 @@ final class StudioPostEditor extends Component
 
     public string $featuredImageGradient = 'from-pink-600 via-purple-800 to-indigo-950';
 
-    public string $authorName = 'Vice Telemetry Desk';
+    public string $authorName = 'joe';
 
     public string $authorRole = 'Lead Technical Analyst';
 
@@ -355,7 +355,7 @@ final class StudioPostEditor extends Component
             'content_blocks' => $this->contentBlocks,
             'featured_image_label' => $this->featuredImageLabel ?: null,
             'featured_image_gradient' => $this->featuredImageGradient,
-            'author_name' => $this->authorName ?: 'Vice Telemetry Desk',
+            'author_name' => $this->authorName ?: 'joe',
             'author_role' => $this->authorRole ?: 'Lead Technical Analyst',
             'status' => $validated['status'],
             'verification_badge' => $validated['verificationBadge'],

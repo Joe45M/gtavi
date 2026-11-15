@@ -130,7 +130,7 @@ final readonly class PostService
                 'rendered_html' => $renderedHtml,
                 'featured_image_label' => $payload['featured_image_label'] ?? null,
                 'featured_image_gradient' => (string) ($payload['featured_image_gradient'] ?? 'from-pink-600 via-purple-700 to-indigo-950'),
-                'author_name' => (string) ($payload['author_name'] ?? 'Vice Telemetry Desk'),
+                'author_name' => (string) ($payload['author_name'] ?? 'joe'),
                 'author_role' => (string) ($payload['author_role'] ?? 'Lead Technical Analyst'),
                 'status' => $status,
                 'verification_badge' => (string) ($payload['verification_badge'] ?? 'technical_projection'),
