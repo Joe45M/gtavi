@@ -354,4 +354,23 @@ final class GtaviMicrositeTest extends TestCase
         $deleteResponse->assertRedirect(route('studio.index'));
         $this->assertDatabaseMissing('posts', ['id' => $created->id]);
     }
+
+    public function test_public_layout_includes_favicons_and_hides_admin_studio_footer_link(): void
+    {
+        $response = $this->get('/');
+
+        $response->assertStatus(200);
+        $response->assertSee('favicon.svg?v=2', false);
+        $response->assertSee('favicon-32x32.png?v=2', false);
+        $response->assertSee('favicon.ico?v=2', false);
+        $response->assertSee('apple-touch-icon.png?v=2', false);
+        $response->assertDontSee('Admin Studio');
+        $response->assertDontSee('href="'.route('studio.index').'"', false);
+
+        foreach (['favicon.svg', 'favicon.ico', 'favicon-32x32.png', 'apple-touch-icon.png'] as $asset) {
+            $path = public_path($asset);
+            $this->assertFileExists($path);
+            $this->assertGreaterThan(0, filesize($path));
+        }
+    }
 }

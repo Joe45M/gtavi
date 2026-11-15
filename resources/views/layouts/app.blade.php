@@ -21,8 +21,10 @@
     <meta name="robots" content="{{ $meta['robots'] ?? 'index, follow' }}">
     <link rel="canonical" href="{{ $meta['canonical'] }}">
 
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=2">
+    <link rel="icon" href="/favicon.ico?v=2" sizes="32x32">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=2">
     <link rel="alternate" type="application/rss+xml" title="GTAVI.PRO Technical Dispatches RSS" href="{{ route('seo.feed') }}">
     <link rel="alternate" type="text/plain" title="LLMs Index" href="{{ route('seo.llms') }}">
     <link rel="alternate" type="text/plain" title="LLMs Full Corpus" href="{{ route('seo.llms-full') }}">
@@ -258,9 +260,6 @@
 
             <div class="mt-6 flex flex-wrap items-center justify-between gap-4 text-xs text-purple-200/75">
                 <p>&copy; {{ date('Y') }} GTAVI.PRO — Independent Community Publication. Zero affiliation with Rockstar Games or Take-Two Interactive.</p>
-                <a href="{{ route('studio.index') }}" class="font-medium text-purple-200 hover:text-white">
-                    Admin Studio
-                </a>
             </div>
         </div>
     </footer>

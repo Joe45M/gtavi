@@ -18,6 +18,11 @@
     <meta name="robots" content="{{ $meta['robots'] ?? 'noindex, nofollow' }}">
     <link rel="canonical" href="{{ $meta['canonical'] }}">
 
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=2">
+    <link rel="icon" href="/favicon.ico?v=2" sizes="32x32">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=2">
+
     @if (!empty($meta['json_ld']))
         <script type="application/ld+json">{!! json_encode($meta['json_ld'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>
     @endif
