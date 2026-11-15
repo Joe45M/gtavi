@@ -8,7 +8,7 @@
         <h1 id="main-heading" tabindex="-1" class="mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
             State of Leonida Map Atlas
         </h1>
-        <p class="mt-3 max-w-3xl text-base leading-relaxed text-slate-600">
+        <p class="article-lead-summary mt-3 max-w-3xl text-base leading-relaxed text-slate-600">
             Explore the six major counties and ecological zones across the projected <strong class="font-semibold text-[#2b124c]">{{ number_format($totalArea, 1) }} km²</strong> State of Leonida footprint, comparing confirmed Trailer 1 regions with cartographic projections.
         </p>
     </header>

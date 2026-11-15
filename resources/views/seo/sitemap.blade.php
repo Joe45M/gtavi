@@ -3,6 +3,7 @@
 @foreach ($staticPages as $page)
     <url>
         <loc>{{ $page['loc'] }}</loc>
+        <lastmod>{{ $page['lastmod'] }}</lastmod>
         <changefreq>{{ $page['changefreq'] }}</changefreq>
         <priority>{{ $page['priority'] }}</priority>
     </url>
@@ -18,6 +19,7 @@
 @foreach ($categories as $category)
     <url>
         <loc>{{ $siteUrl }}/gta/category/{{ $category->slug }}</loc>
+        <lastmod>{{ $archiveLastmod }}</lastmod>
         <changefreq>weekly</changefreq>
         <priority>0.7</priority>
     </url>
@@ -25,6 +27,7 @@
 @foreach ($tags as $tag)
     <url>
         <loc>{{ $siteUrl }}/gta/tag/{{ $tag->slug }}</loc>
+        <lastmod>{{ $archiveLastmod }}</lastmod>
         <changefreq>weekly</changefreq>
         <priority>0.6</priority>
     </url>

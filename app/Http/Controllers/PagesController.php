@@ -35,6 +35,7 @@ final readonly class PagesController
                         'answer' => 'GTAVI.PRO provides interactive calculators for download time, PC hardware VRAM/FPS readiness, edition regional pricing, and Leonida map traversal, plus a full block-based editorial CMS studio.',
                     ],
                 ],
+                ogImage: $siteUrl.'/og/default.svg',
             ),
         ]);
     }
@@ -44,6 +45,16 @@ final readonly class PagesController
         $siteUrl = rtrim((string) config('app.url', 'https://gtavi.pro'), '/');
         $milestones = $data->milestones();
         $platforms = $data->platformSpecs();
+
+        $itemList = [];
+        foreach ($milestones->values() as $idx => $milestone) {
+            $itemList[] = [
+                '@type' => 'ListItem',
+                'position' => $idx + 1,
+                'name' => $milestone->display_date_label.' — '.$milestone->title,
+                'description' => $milestone->description,
+            ];
+        }
 
         return view('pages.release-info', [
             'milestones' => $milestones,
@@ -55,6 +66,28 @@ final readonly class PagesController
                 breadcrumbs: [
                     ['name' => 'Home', 'url' => $siteUrl.'/'],
                     ['name' => 'Release Info', 'url' => $siteUrl.'/release-info'],
+                ],
+                ogImage: $siteUrl.'/og/release-info.svg',
+                extraGraphNodes: [
+                    [
+                        '@type' => 'Dataset',
+                        '@id' => $siteUrl.'/release-info#dataset',
+                        'name' => 'GTA VI Official Announcements & Release Milestones Dataset',
+                        'description' => 'Verified chronological dataset of Rockstar Games Newswire disclosures, Take-Two Interactive earnings calls, and projected PC port timelines.',
+                        'url' => $siteUrl.'/release-info',
+                        'isAccessibleForFree' => true,
+                        'creator' => ['@id' => $siteUrl.'/#organization'],
+                        'distribution' => [
+                            '@type' => 'DataDownload',
+                            'encodingFormat' => 'application/json',
+                            'contentUrl' => $siteUrl.'/api/v1/milestones',
+                        ],
+                    ],
+                    [
+                        '@type' => 'ItemList',
+                        'name' => 'GTA VI Announcement & Launch Timeline',
+                        'itemListElement' => $itemList,
+                    ],
                 ],
             ),
         ]);
@@ -75,6 +108,23 @@ final readonly class PagesController
                     ['name' => 'Home', 'url' => $siteUrl.'/'],
                     ['name' => 'Prices & Editions', 'url' => $siteUrl.'/prices-editions'],
                 ],
+                ogImage: $siteUrl.'/og/prices-editions.svg',
+                extraGraphNodes: [
+                    [
+                        '@type' => 'Dataset',
+                        '@id' => $siteUrl.'/prices-editions#dataset',
+                        'name' => 'GTA VI Multi-Currency Edition Pricing Projection Dataset',
+                        'description' => 'Modeled retail pricing matrix across USD, GBP, EUR, CAD, AUD, and JPY for Standard, Deluxe, and Collector editions.',
+                        'url' => $siteUrl.'/prices-editions',
+                        'isAccessibleForFree' => true,
+                        'creator' => ['@id' => $siteUrl.'/#organization'],
+                        'distribution' => [
+                            '@type' => 'DataDownload',
+                            'encodingFormat' => 'application/json',
+                            'contentUrl' => $siteUrl.'/api/v1/editions',
+                        ],
+                    ],
+                ],
             ),
         ]);
     }
@@ -94,6 +144,23 @@ final readonly class PagesController
                     ['name' => 'Home', 'url' => $siteUrl.'/'],
                     ['name' => 'Download Sizes & Specs', 'url' => $siteUrl.'/download-sizes'],
                 ],
+                ogImage: $siteUrl.'/og/download-sizes.svg',
+                extraGraphNodes: [
+                    [
+                        '@type' => 'Dataset',
+                        '@id' => $siteUrl.'/download-sizes#dataset',
+                        'name' => 'GTA VI Platform Storage, SSD Speed & Hardware Specs Dataset',
+                        'description' => 'Projected base and hi-res pack download sizes, SSD throughput minimums, RAM/VRAM budgets, and upscaling targets across PS5, PS5 Pro, Xbox Series X|S, and PC.',
+                        'url' => $siteUrl.'/download-sizes',
+                        'isAccessibleForFree' => true,
+                        'creator' => ['@id' => $siteUrl.'/#organization'],
+                        'distribution' => [
+                            '@type' => 'DataDownload',
+                            'encodingFormat' => 'application/json',
+                            'contentUrl' => $siteUrl.'/api/v1/platforms',
+                        ],
+                    ],
+                ],
             ),
         ]);
     }
@@ -101,20 +168,69 @@ final readonly class PagesController
     public function calculators(Request $request, SeoService $seo): View
     {
         $siteUrl = rtrim((string) config('app.url', 'https://gtavi.pro'), '/');
-        $tab = (string) $request->query('tab', 'download');
-        if (! in_array($tab, ['download', 'pc', 'edition', 'map'], true)) {
-            $tab = 'download';
-        }
+        $rawTab = (string) $request->query('tab', '');
+        $validTabs = ['download', 'pc', 'edition', 'map'];
+        $hasSpecificTab = in_array($rawTab, $validTabs, true);
+        $tab = $hasSpecificTab ? $rawTab : 'download';
+
+        $tabMeta = [
+            'download' => [
+                'title' => 'GTA VI Download Time & Pre-Load Bandwidth Calculator | GTAVI.PRO',
+                'description' => 'Calculate exact GTA VI download duration across Mbps, MB/s, or Gbps connections with CDN overhead, data cap usage, and safe NVMe SSD headroom.',
+            ],
+            'pc' => [
+                'title' => 'GTA VI PC Requirements, VRAM & FPS Readiness Calculator | GTAVI.PRO',
+                'description' => 'Test your desktop CPU, GPU VRAM, system RAM, ray tracing, and DLSS/FSR upscaling against projected GTA VI RAGE 9 PC performance targets.',
+            ],
+            'edition' => [
+                'title' => 'GTA VI Edition Value & Multi-Currency Cost-Per-Hour Calculator | GTAVI.PRO',
+                'description' => 'Compare Standard, Deluxe, and Collector GTA VI edition projections across USD, GBP, EUR, CAD, AUD, and JPY against expected play hours.',
+            ],
+            'map' => [
+                'title' => 'State of Leonida Map Scale & Vehicle Travel Time Calculator | GTAVI.PRO',
+                'description' => 'Compare projected 125 km² Leonida scale against GTA V Los Santos and calculate cross-state driving, airboat, and jet traversal times.',
+            ],
+        ];
+
+        $pageTitle = $hasSpecificTab
+            ? $tabMeta[$tab]['title']
+            : 'GTA VI Calculators: Download Time, PC FPS Readiness & Edition Value | GTAVI.PRO';
+        $pageDescription = $hasSpecificTab
+            ? $tabMeta[$tab]['description']
+            : 'Interactive GTA VI calculators: compute pre-load download time, test PC VRAM and CPU bottlenecks, compare edition currencies, and estimate Leonida travel times.';
+        $canonicalUrl = $hasSpecificTab ? $siteUrl.'/calculators?tab='.$tab : $siteUrl.'/calculators';
 
         return view('pages.calculators', [
             'initialTab' => $tab,
             'seoMeta' => $seo->buildPageMeta(
-                title: 'GTA VI Calculators: Download Time, PC FPS Readiness & Edition Value | GTAVI.PRO',
-                description: 'Interactive GTA VI calculators: compute pre-load download time, test PC VRAM and CPU bottlenecks, compare edition currencies, and estimate Leonida travel times.',
-                canonicalUrl: $siteUrl.'/calculators',
+                title: $pageTitle,
+                description: $pageDescription,
+                canonicalUrl: $canonicalUrl,
                 breadcrumbs: [
                     ['name' => 'Home', 'url' => $siteUrl.'/'],
                     ['name' => 'Calculators', 'url' => $siteUrl.'/calculators'],
+                ],
+                ogImage: $siteUrl.'/og/calculators.svg',
+                extraGraphNodes: [
+                    [
+                        '@type' => 'SoftwareApplication',
+                        '@id' => $canonicalUrl.'#software',
+                        'name' => 'GTAVI.PRO Interactive Telemetry Calculator Suite',
+                        'applicationCategory' => 'UtilitiesApplication',
+                        'operatingSystem' => 'Any',
+                        'url' => $canonicalUrl,
+                        'offers' => [
+                            '@type' => 'Offer',
+                            'price' => '0',
+                            'priceCurrency' => 'USD',
+                        ],
+                        'featureList' => [
+                            'Pre-load download time and ISP data cap estimator',
+                            'PC CPU, GPU, VRAM, and DLSS/FSR bottleneck analyzer',
+                            'Multi-currency edition cost-per-hour calculator',
+                            'State of Leonida map scale and traversal estimator',
+                        ],
+                    ],
                 ],
             ),
         ]);
@@ -130,11 +246,28 @@ final readonly class PagesController
             'totalArea' => (float) $locations->sum('estimated_area_sq_km'),
             'seoMeta' => $seo->buildPageMeta(
                 title: 'State of Leonida Map Atlas & Vice City Region Telemetry | GTAVI.PRO',
-                description: 'Explore Vice City Metro, Leonida Keys, Grassrivers wetlands, Port Gellhorn, and Ambrosia with projected square-kilometer metrics and landmark lists.',
+                description: 'Explore Vice City Metro, Leonida Keys, Grassrivers, Port Gellhorn, and Ambrosia with projected square-kilometer metrics and landmark lists.',
                 canonicalUrl: $siteUrl.'/map-atlas',
                 breadcrumbs: [
                     ['name' => 'Home', 'url' => $siteUrl.'/'],
                     ['name' => 'Leonida Map Atlas', 'url' => $siteUrl.'/map-atlas'],
+                ],
+                ogImage: $siteUrl.'/og/map-atlas.svg',
+                extraGraphNodes: [
+                    [
+                        '@type' => 'Dataset',
+                        '@id' => $siteUrl.'/map-atlas#dataset',
+                        'name' => 'State of Leonida Cartography & Biome Projections Dataset',
+                        'description' => 'Telemetry dataset detailing the six confirmed State of Leonida regions, biome profiles, landmark lists, and projected area metrics.',
+                        'url' => $siteUrl.'/map-atlas',
+                        'isAccessibleForFree' => true,
+                        'creator' => ['@id' => $siteUrl.'/#organization'],
+                        'distribution' => [
+                            '@type' => 'DataDownload',
+                            'encodingFormat' => 'application/json',
+                            'contentUrl' => $siteUrl.'/api/v1/locations',
+                        ],
+                    ],
                 ],
             ),
         ]);
@@ -153,6 +286,7 @@ final readonly class PagesController
                     ['name' => 'Home', 'url' => $siteUrl.'/'],
                     ['name' => 'Disclaimer', 'url' => $siteUrl.'/disclaimer'],
                 ],
+                ogImage: $siteUrl.'/og/disclaimer.svg',
             ),
         ]);
     }

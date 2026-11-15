@@ -10,6 +10,7 @@ Route::prefix('gta')->name('blog.')->group(function (): void {
     Route::get('/', [PostsController::class, 'index'])->name('index');
     Route::get('/category/{slug}', [PostsController::class, 'category'])->name('category');
     Route::get('/tag/{slug}', [PostsController::class, 'tag'])->name('tag');
+    Route::get('/{slug}.md', [PostsController::class, 'showMarkdown'])->name('show.markdown');
     Route::get('/{slug}', [PostsController::class, 'show'])->name('show');
 });
 

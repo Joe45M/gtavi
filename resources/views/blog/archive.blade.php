@@ -8,7 +8,7 @@
         <h1 id="main-heading" tabindex="-1" class="mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
             {{ $archiveTitle }}
         </h1>
-        <p class="mt-3 max-w-2xl text-base leading-relaxed text-slate-600">
+        <p class="article-lead-summary mt-3 max-w-2xl text-base leading-relaxed text-slate-600">
             {{ $archiveDescription }}
         </p>
         <div class="mt-5 flex flex-wrap gap-2">
@@ -36,7 +36,8 @@
                 </h2>
                 <p class="mt-2 flex-1 text-sm leading-relaxed text-slate-600">{{ $post->excerpt }}</p>
                 <div class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500">
-                    <span>{{ ($post->published_at ?? $post->created_at)?->format('j M Y') }}</span>
+                    @php $postDate = $post->published_at ?? $post->created_at; @endphp
+                    <span>@if ($postDate)<time datetime="{{ $postDate->toIso8601String() }}">{{ $postDate->format('j M Y') }}</time>@endif</span>
                     <span>{{ $post->reading_time_minutes }} min read</span>
                 </div>
             </article>

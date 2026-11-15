@@ -8,7 +8,7 @@
         <h1 id="main-heading" tabindex="-1" class="mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
             GTA VI Calculators: Download, PC Specs, Editions &amp; Map Scale
         </h1>
-        <p class="mt-3 max-w-3xl text-base leading-relaxed text-slate-600">
+        <p class="article-lead-summary mt-3 max-w-3xl text-base leading-relaxed text-slate-600">
             Independent estimation models built for pre-launch bandwidth planning, rig upgrades, regional edition budgeting, and State of Leonida traversal timing.
         </p>
     </header>

@@ -92,24 +92,88 @@ final class GtaviMicrositeTest extends TestCase
     {
         $sitemap = $this->get('/sitemap.xml');
         $sitemap->assertOk();
-        $sitemap->assertHeader('Content-Type', 'application/xml; charset=utf-8');
+        $sitemap->assertHeader('Content-Type', 'application/xml; charset=UTF-8');
         $sitemap->assertSee('<urlset', false);
+        $sitemap->assertSee('<lastmod>', false);
         $sitemap->assertSee('/gta/gta-vi-download-size-pre-load-math-ssd-guide', false);
 
         $this->get('/blog')->assertRedirect('/gta')->assertStatus(301);
         $this->get('/blog/gta-vi-download-size-pre-load-math-ssd-guide')
             ->assertRedirect('/gta/gta-vi-download-size-pre-load-math-ssd-guide')
             ->assertStatus(301);
+        $this->get('/editions')->assertRedirect('/prices-editions')->assertStatus(301);
+        $this->get('/map')->assertRedirect('/map-atlas')->assertStatus(301);
 
         $robots = $this->get('/robots.txt');
         $robots->assertOk();
+        $robots->assertHeader('Content-Type', 'text/plain; charset=UTF-8');
         $robots->assertSee('Sitemap:', false);
         $robots->assertSee('Disallow: /studio', false);
+        $robots->assertSee('OAI-SearchBot', false);
+        $robots->assertSee('PerplexityBot', false);
+        $robots->assertSee('ClaudeBot', false);
+        $robots->assertSee('Google-Extended', false);
 
         $llms = $this->get('/llms.txt');
         $llms->assertOk();
         $llms->assertSee('GTAVI.PRO', false);
         $llms->assertSee('NOT affiliated with', false);
+        $llms->assertSee('/llms-full.txt', false);
+        $llms->assertSee('/openapi.json', false);
+        $llms->assertSee('.md)', false);
+
+        $llmsFull = $this->get('/llms-full.txt');
+        $llmsFull->assertOk();
+        $llmsFull->assertHeader('Content-Type', 'text/plain; charset=UTF-8');
+        $llmsFull->assertSee('Verified Release Timeline & Projections', false);
+        $llmsFull->assertSee('Projected Editions & Regional Pricing Matrix', false);
+        $llmsFull->assertSee('Platform Hardware, Download Sizes & SSD Throughput Matrix', false);
+        $llmsFull->assertSee('State of Leonida Map Atlas & Regions', false);
+        $llmsFull->assertSee('Complete Technical Articles', false);
+
+        $feed = $this->get('/feed.xml');
+        $feed->assertOk();
+        $feed->assertHeader('Content-Type', 'application/rss+xml; charset=UTF-8');
+        $feed->assertSee('<rss version="2.0"', false);
+        $feed->assertSee('/gta/gta-vi-download-size-pre-load-math-ssd-guide', false);
+
+        $openapi = $this->getJson('/openapi.json');
+        $openapi->assertOk();
+        $openapi->assertJsonPath('openapi', '3.1.0');
+        $openapi->assertJsonStructure(['paths' => ['/api/v1/posts', '/api/v1/milestones', '/api/v1/locations']]);
+
+        $ogDefault = $this->get('/og/default.svg');
+        $ogDefault->assertOk();
+        $ogDefault->assertHeader('Content-Type', 'image/svg+xml; charset=UTF-8');
+        $ogDefault->assertSee('<svg', false);
+
+        $ogPost = $this->get('/og/gta-vi-download-size-pre-load-math-ssd-guide.svg');
+        $ogPost->assertOk();
+        $ogPost->assertSee('GTA VI Download Size', false);
+
+        $mdPost = $this->get('/gta/gta-vi-download-size-pre-load-math-ssd-guide.md');
+        $mdPost->assertOk();
+        $mdPost->assertHeader('Content-Type', 'text/markdown; charset=UTF-8');
+        $mdPost->assertHeader('X-Robots-Tag', 'noindex, follow');
+        $mdPost->assertSee('# GTA VI Download Size', false);
+        $mdPost->assertSee('| Platform | Base Estimate |', false);
+
+        $filteredBlog = $this->get('/gta?q=test');
+        $filteredBlog->assertOk();
+        $filteredBlog->assertSee('<meta name="robots" content="noindex, follow">', false);
+
+        $postPage = $this->get('/gta/gta-vi-download-size-pre-load-math-ssd-guide');
+        $postPage->assertOk();
+        $postPage->assertSee('property="og:image"', false);
+        $postPage->assertSee('type="text/markdown"', false);
+        $postPage->assertSee('type="application/rss+xml"', false);
+        $postPage->assertSee('type="speculationrules"', false);
+        $postPage->assertSee('<time datetime=', false);
+
+        $pcCalc = $this->get('/calculators?tab=pc');
+        $pcCalc->assertOk();
+        $pcCalc->assertSee('GTA VI PC Requirements, VRAM &amp; FPS Readiness Calculator', false);
+        $pcCalc->assertSee('calculators?tab=pc', false);
 
         $estimate = $this->postJson('/calculators/download-estimate', [
             'speed' => 500,
@@ -161,6 +225,15 @@ final class GtaviMicrositeTest extends TestCase
         $platforms = $this->getJson('/api/v1/platforms');
         $platforms->assertOk();
         $platforms->assertJsonCount(6, 'data');
+
+        $milestones = $this->getJson('/api/v1/milestones');
+        $milestones->assertOk();
+        $milestones->assertJsonStructure(['data', 'disclaimer']);
+
+        $locations = $this->getJson('/api/v1/locations');
+        $locations->assertOk();
+        $locations->assertJsonCount(6, 'data');
+        $locations->assertJsonStructure(['data', 'disclaimer']);
     }
 
     public function test_interactive_calculators_livewire_switches_tabs_and_updates_projections(): void

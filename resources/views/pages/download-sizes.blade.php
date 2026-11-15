@@ -8,7 +8,7 @@
         <h1 id="main-heading" tabindex="-1" class="mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
             GTA VI Download Sizes &amp; Hardware Specs
         </h1>
-        <p class="mt-3 max-w-3xl text-base leading-relaxed text-slate-600">
+        <p class="article-lead-summary mt-3 max-w-3xl text-base leading-relaxed text-slate-600">
             Projected install footprints, optional high-resolution texture packs, SSD throughput minimums, and ray-tracing tiers across PS5, PS5 Pro, Xbox Series X|S, and PC.
             Official sizes await Rockstar Games confirmation.
         </p>

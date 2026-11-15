@@ -36,8 +36,15 @@
                 </h1>
 
                 @if ($post->subtitle)
-                    <p class="mt-3 text-lg leading-relaxed text-slate-600">{{ $post->subtitle }}</p>
+                    <p class="article-lead-summary mt-3 text-lg leading-relaxed text-slate-600">{{ $post->subtitle }}</p>
+                @else
+                    <p class="article-lead-summary mt-3 text-lg leading-relaxed text-slate-600">{{ $post->excerpt }}</p>
                 @endif
+
+                @php
+                    $publishedDate = $post->published_at ?? $post->created_at;
+                    $updatedDate = $post->updated_at ?? $publishedDate;
+                @endphp
 
                 <div class="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-4 text-xs text-slate-500">
                     <div>
@@ -45,7 +52,12 @@
                         <span>&bull; {{ $post->author_role }}</span>
                     </div>
                     <div class="flex flex-wrap items-center gap-3">
-                        <span>Published {{ ($post->published_at ?? $post->created_at)?->format('j M Y') }}</span>
+                        @if ($publishedDate)
+                            <span>Published <time datetime="{{ $publishedDate->toIso8601String() }}">{{ $publishedDate->format('j M Y') }}</time></span>
+                        @endif
+                        @if ($updatedDate)
+                            <span>&bull; Updated <time datetime="{{ $updatedDate->toIso8601String() }}">{{ $updatedDate->format('j M Y') }}</time></span>
+                        @endif
                         <span>&bull; {{ $post->word_count }} words</span>
                         <span>&bull; {{ $post->reading_time_minutes }} min read</span>
                     </div>
@@ -115,7 +127,19 @@
                         </div>
                         <div class="flex justify-between gap-3">
                             <dt class="text-slate-500">Published</dt>
-                            <dd class="font-semibold text-slate-900">{{ ($post->published_at ?? $post->created_at)?->format('j M Y') }}</dd>
+                            <dd class="font-semibold text-slate-900">
+                                @if ($publishedDate)
+                                    <time datetime="{{ $publishedDate->toIso8601String() }}">{{ $publishedDate->format('j M Y') }}</time>
+                                @endif
+                            </dd>
+                        </div>
+                        <div class="flex justify-between gap-3">
+                            <dt class="text-slate-500">Last Verified</dt>
+                            <dd class="font-semibold text-slate-900">
+                                @if ($updatedDate)
+                                    <time datetime="{{ $updatedDate->toIso8601String() }}">{{ $updatedDate->format('j M Y') }}</time>
+                                @endif
+                            </dd>
                         </div>
                         <div class="flex justify-between gap-3">
                             <dt class="text-slate-500">Length</dt>
@@ -124,8 +148,9 @@
                     </dl>
 
                     <div class="mt-4 border-t border-slate-100 pt-4 text-xs">
-                        <p class="font-semibold uppercase tracking-wide text-[#2b124c]">Reference Tools</p>
+                        <p class="font-semibold uppercase tracking-wide text-[#2b124c]">Citation &amp; Machine Formats</p>
                         <ul class="mt-2 space-y-1.5">
+                            <li><a href="{{ route('blog.show.markdown', $post->slug) }}" class="font-medium text-[#2b124c] hover:text-[#be185d]">&rarr; View Clean Markdown (.md)</a></li>
                             <li><a href="{{ route('calculators', ['tab' => 'download']) }}" class="text-slate-600 hover:text-[#be185d]">&rarr; Download Time Calculator</a></li>
                             <li><a href="{{ route('prices-editions') }}" class="text-slate-600 hover:text-[#be185d]">&rarr; Editions &amp; Pricing Matrix</a></li>
                             <li><a href="{{ route('release-info') }}" class="text-slate-600 hover:text-[#be185d]">&rarr; Verified Filings Timeline</a></li>

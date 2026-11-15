@@ -15,7 +15,7 @@ final class ServicesTest extends TestCase
 {
     public function test_calculator_service_computes_download_time_and_storage_buffer(): void
     {
-        $service = new CalculatorService();
+        $service = new CalculatorService;
 
         $result = $service->calculateDownloadTime(
             speedValue: 100.0,
@@ -36,7 +36,7 @@ final class ServicesTest extends TestCase
 
     public function test_calculator_service_estimates_pc_readiness_and_vram_bottleneck(): void
     {
-        $service = new CalculatorService();
+        $service = new CalculatorService;
 
         $balanced = $service->estimatePcReadiness(
             cpuTier: 'high',
@@ -70,7 +70,7 @@ final class ServicesTest extends TestCase
 
     public function test_calculator_service_evaluates_edition_value_and_map_scale(): void
     {
-        $service = new CalculatorService();
+        $service = new CalculatorService;
 
         $edition = new GameEdition([
             'name' => 'Vice Deluxe Edition',
@@ -107,7 +107,7 @@ final class ServicesTest extends TestCase
 
     public function test_content_block_service_renders_accessible_tables_faqs_and_sanitizes_xss_links(): void
     {
-        $blocksService = new ContentBlockService();
+        $blocksService = new ContentBlockService;
 
         $blocks = [
             [
@@ -160,11 +160,37 @@ final class ServicesTest extends TestCase
         $faqs = $blocksService->extractFaqItems($blocks);
         $this->assertCount(1, $faqs);
         $this->assertSame('Is pre-load mandatory?', $faqs[0]['question']);
+
+        $blocksWithQuote = array_merge($blocks, [
+            [
+                'type' => 'quote',
+                'text' => 'Grand Theft Auto VI launches November 19, 2026.',
+                'source' => 'Rockstar Newswire',
+                'cite_url' => 'https://www.rockstargames.com/newswire',
+            ],
+            [
+                'type' => 'paragraph',
+                'text' => 'Verify disclosures on [Take-Two IR](https://ir.take2games.com/) and [Rockstar](https://www.rockstargames.com/newswire).',
+            ],
+        ]);
+
+        $markdown = $blocksService->renderMarkdown($blocksWithQuote);
+        $this->assertStringContainsString('## Leonida Storage & File Matrix', $markdown);
+        $this->assertStringContainsString('| Platform | Estimated Footprint |', $markdown);
+        $this->assertStringContainsString('| PS5 | 155 GB |', $markdown);
+        $this->assertStringContainsString('### Is pre-load mandatory?', $markdown);
+        $this->assertStringContainsString('> "Grand Theft Auto VI launches November 19, 2026."', $markdown);
+
+        $citations = $blocksService->extractCitations($blocksWithQuote);
+        $this->assertSame([
+            'https://www.rockstargames.com/newswire',
+            'https://ir.take2games.com/',
+        ], $citations);
     }
 
     public function test_seo_service_scores_content_and_builds_graph_json_ld(): void
     {
-        $blocksService = new ContentBlockService();
+        $blocksService = new ContentBlockService;
         $seoService = new SeoService($blocksService);
 
         $sentence = 'Leonida bandwidth planning keeps SSD headroom healthy during launch week. ';
@@ -209,6 +235,8 @@ final class ServicesTest extends TestCase
         ]);
 
         $this->assertGreaterThanOrEqual(90, $analysis['seo_score']);
+        $this->assertSame(100, $analysis['geo_score']);
+        $this->assertCount(3, $analysis['geo_checks']);
         $this->assertGreaterThanOrEqual(60, $analysis['readability_score']);
         $this->assertGreaterThan(550, $analysis['word_count']);
 
@@ -223,13 +251,37 @@ final class ServicesTest extends TestCase
             faqItems: [
                 ['question' => 'Is this official?', 'answer' => 'No, GTAVI.PRO is independent.'],
             ],
+            ogImage: 'https://gtavi.pro/og/default.svg',
+            markdownUrl: 'https://gtavi.pro/gta/test.md',
+            extraGraphNodes: [
+                [
+                    '@type' => 'Dataset',
+                    'name' => 'Test Telemetry Dataset',
+                ],
+                [
+                    '@type' => 'SoftwareApplication',
+                    'name' => 'Test Calculator App',
+                ],
+            ],
         );
 
+        $this->assertSame('https://gtavi.pro/og/default.svg', $meta['og_image']);
+        $this->assertSame('https://gtavi.pro/gta/test.md', $meta['markdown_url']);
         $this->assertSame('https://schema.org', $meta['json_ld']['@context']);
+
         $types = array_column($meta['json_ld']['@graph'], '@type');
         $this->assertContains('WebSite', $types);
         $this->assertContains('Organization', $types);
+        $this->assertContains('VideoGame', $types);
+        $this->assertContains('WebPage', $types);
         $this->assertContains('BreadcrumbList', $types);
         $this->assertContains('FAQPage', $types);
+        $this->assertContains('Dataset', $types);
+        $this->assertContains('SoftwareApplication', $types);
+
+        $webPageNode = collect($meta['json_ld']['@graph'])->firstWhere('@type', 'WebPage');
+        $this->assertSame('SpeakableSpecification', $webPageNode['speakable']['@type']);
+        $orgNode = collect($meta['json_ld']['@graph'])->firstWhere('@type', 'Organization');
+        $this->assertSame('ImageObject', $orgNode['logo']['@type']);
     }
 }

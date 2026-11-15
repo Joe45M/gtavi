@@ -37,14 +37,17 @@
                 @endif
             </h1>
 
-            <p class="mt-4 text-base leading-relaxed text-slate-600 sm:text-lg">
+            <p class="article-lead-summary mt-4 text-base leading-relaxed text-slate-600 sm:text-lg">
                 {{ $leadPost?->excerpt ?? 'Independent GTA VI release tracker, download time calculator, edition price matrix, and State of Leonida analysis—separate from official Rockstar Games announcements.' }}
             </p>
 
             @if ($leadPost)
+                @php $leadDate = $leadPost->published_at ?? $leadPost->created_at; @endphp
                 <div class="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-slate-200 py-3 text-xs text-slate-500">
                     <span>By <strong class="font-semibold text-slate-900">{{ $leadPost->author_name }}</strong> ({{ $leadPost->author_role }})</span>
-                    <span>&bull; {{ ($leadPost->published_at ?? $leadPost->created_at)?->format('j M Y') }}</span>
+                    @if ($leadDate)
+                        <span>&bull; <time datetime="{{ $leadDate->toIso8601String() }}">{{ $leadDate->format('j M Y') }}</time></span>
+                    @endif
                     <span>&bull; {{ $leadPost->reading_time_minutes }} min read</span>
                 </div>
             @endif
@@ -118,9 +121,10 @@
 
                 <ul class="mt-3 divide-y divide-slate-200">
                     @foreach ($secondaryPosts->take(4) as $wirePost)
+                        @php $wireDate = $wirePost->published_at ?? $wirePost->created_at; @endphp
                         <li class="py-3 first:pt-1 last:pb-0">
                             <span class="block text-[11px] font-semibold text-[#be185d]">
-                                {{ $wirePost->category->name }} &bull; {{ ($wirePost->published_at ?? $wirePost->created_at)?->format('j M') }}
+                                {{ $wirePost->category->name }} @if ($wireDate)&bull; <time datetime="{{ $wireDate->toIso8601String() }}">{{ $wireDate->format('j M') }}</time>@endif
                             </span>
                             <h3 class="mt-1 text-sm font-semibold leading-snug text-slate-900">
                                 <a href="{{ route('blog.show', $wirePost->slug) }}" class="hover:text-[#2b124c]">
@@ -220,7 +224,8 @@
                     </p>
 
                     <div class="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-500">
-                        <span>{{ ($post->published_at ?? $post->created_at)?->format('j M Y') }}</span>
+                        @php $cardDate = $post->published_at ?? $post->created_at; @endphp
+                        <span>@if ($cardDate)<time datetime="{{ $cardDate->toIso8601String() }}">{{ $cardDate->format('j M Y') }}</time>@endif</span>
                         <span>{{ $post->reading_time_minutes }} min read &bull; {{ $post->word_count }} words</span>
                     </div>
                 </article>

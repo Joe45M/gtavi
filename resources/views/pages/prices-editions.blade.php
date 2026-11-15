@@ -8,7 +8,7 @@
         <h1 id="main-heading" tabindex="-1" class="mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
             GTA VI Prices &amp; Editions Matrix
         </h1>
-        <p class="mt-3 max-w-3xl text-base leading-relaxed text-slate-600">
+        <p class="article-lead-summary mt-3 max-w-3xl text-base leading-relaxed text-slate-600">
             Compare projected Standard, Deluxe, and Collector editions across USD, GBP, EUR, CAD, AUD, and JPY.
             Official retail SKUs have not yet been announced by Rockstar Games or Take-Two Interactive; all prices shown here are independent editorial projections.
         </p>

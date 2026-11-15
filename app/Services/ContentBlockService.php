@@ -45,6 +45,77 @@ final readonly class ContentBlockService
     }
 
     /**
+     * Render structured content blocks into clean GitHub-Flavored Markdown for LLMs and RAG crawlers.
+     *
+     * @param  array<int, array<string, mixed>>  $blocks
+     */
+    public function renderMarkdown(array $blocks): string
+    {
+        $chunks = [];
+
+        foreach ($blocks as $block) {
+            if (! is_array($block)) {
+                continue;
+            }
+
+            $type = (string) ($block['type'] ?? 'paragraph');
+            $rendered = match ($type) {
+                'heading' => $this->renderMarkdownHeading($block),
+                'paragraph' => trim((string) ($block['text'] ?? '')),
+                'callout' => $this->renderMarkdownCallout($block),
+                'spec_table' => $this->renderMarkdownSpecTable($block),
+                'faq' => $this->renderMarkdownFaq($block),
+                'calculator_embed' => $this->renderMarkdownCalculatorEmbed($block),
+                'quote' => $this->renderMarkdownQuote($block),
+                'code' => $this->renderMarkdownCode($block),
+                'stat_grid' => $this->renderMarkdownStatGrid($block),
+                default => trim((string) ($block['text'] ?? '')),
+            };
+
+            if ($rendered !== '') {
+                $chunks[] = $rendered;
+            }
+        }
+
+        return implode("\n\n", $chunks);
+    }
+
+    /**
+     * Extract deduplicated external citation URLs from quote and paragraph blocks.
+     *
+     * @param  array<int, array<string, mixed>>  $blocks
+     * @return list<string>
+     */
+    public function extractCitations(array $blocks): array
+    {
+        $urls = [];
+
+        foreach ($blocks as $block) {
+            if (! is_array($block)) {
+                continue;
+            }
+
+            if (($block['type'] ?? '') === 'quote') {
+                $citeUrl = trim((string) ($block['cite_url'] ?? ''));
+                if ($this->isExternalHttpUrl($citeUrl)) {
+                    $urls[] = $citeUrl;
+                }
+            }
+
+            $text = (string) ($block['text'] ?? '');
+            if ($text !== '' && preg_match_all('/\[[^\]]+\]\((https?:\/\/[^)\s]+)\)/i', $text, $matches)) {
+                foreach ($matches[1] as $matchedUrl) {
+                    if ($this->isExternalHttpUrl($matchedUrl)) {
+                        $urls[] = $matchedUrl;
+                    }
+                }
+            }
+        }
+
+        return array_values(array_unique($urls));
+    }
+
+    /**
      * Extract a sequential Table of Contents from heading blocks.
      *
      * @param  array<int, array<string, mixed>>  $blocks
@@ -578,6 +649,185 @@ final readonly class ContentBlockService
         $scheme = parse_url($trimmed, PHP_URL_SCHEME);
 
         return in_array($scheme, ['http', 'https'], true);
+    }
+
+    private function isExternalHttpUrl(string $url): bool
+    {
+        $trimmed = trim($url);
+        if ($trimmed === '') {
+            return false;
+        }
+
+        $scheme = parse_url($trimmed, PHP_URL_SCHEME);
+
+        return in_array($scheme, ['http', 'https'], true);
+    }
+
+    /**
+     * @param  array<string, mixed>  $block
+     */
+    private function renderMarkdownHeading(array $block): string
+    {
+        $text = trim((string) ($block['text'] ?? ''));
+        if ($text === '') {
+            return '';
+        }
+
+        $prefix = ((int) ($block['level'] ?? 2)) === 3 ? '###' : '##';
+
+        return "{$prefix} {$text}";
+    }
+
+    /**
+     * @param  array<string, mixed>  $block
+     */
+    private function renderMarkdownCallout(array $block): string
+    {
+        $tone = strtoupper(trim((string) ($block['tone'] ?? 'info')));
+        $title = trim((string) ($block['title'] ?? 'Editorial Note'));
+        $text = trim((string) ($block['text'] ?? ''));
+
+        if ($title === '' && $text === '') {
+            return '';
+        }
+
+        return "> **{$title} ({$tone}):** {$text}";
+    }
+
+    /**
+     * @param  array<string, mixed>  $block
+     */
+    private function renderMarkdownSpecTable(array $block): string
+    {
+        $caption = trim((string) ($block['caption'] ?? 'Technical Specification Table'));
+        $headers = is_array($block['headers'] ?? null) ? array_values($block['headers']) : [];
+        $rows = is_array($block['rows'] ?? null) ? array_values($block['rows']) : [];
+
+        if ($headers === [] || $rows === []) {
+            return '';
+        }
+
+        $escapeCell = static fn (mixed $val): string => str_replace(['|', "\r", "\n"], ['\|', ' ', ' '], trim((string) $val));
+
+        $lines = [
+            "### {$caption}",
+            '',
+            '| '.implode(' | ', array_map($escapeCell, $headers)).' |',
+            '| '.implode(' | ', array_fill(0, count($headers), '---')).' |',
+        ];
+
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $cells = array_values($row);
+            $padded = [];
+            foreach ($headers as $idx => $unused) {
+                $padded[] = $escapeCell($cells[$idx] ?? '—');
+            }
+            $lines[] = '| '.implode(' | ', $padded).' |';
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * @param  array<string, mixed>  $block
+     */
+    private function renderMarkdownFaq(array $block): string
+    {
+        $heading = trim((string) ($block['heading'] ?? 'Frequently Asked Questions'));
+        $items = is_array($block['items'] ?? null) ? $block['items'] : [];
+        if ($items === []) {
+            return '';
+        }
+
+        $chunks = ["## {$heading}"];
+        foreach ($items as $item) {
+            $q = trim((string) ($item['question'] ?? ''));
+            $a = trim((string) ($item['answer'] ?? ''));
+            if ($q === '' || $a === '') {
+                continue;
+            }
+            $chunks[] = "### {$q}\n\n{$a}";
+        }
+
+        return count($chunks) > 1 ? implode("\n\n", $chunks) : '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $block
+     */
+    private function renderMarkdownCalculatorEmbed(array $block): string
+    {
+        $calcType = (string) ($block['calculator_type'] ?? 'download');
+        $tab = match ($calcType) {
+            'pc', 'edition', 'map' => $calcType,
+            default => 'download',
+        };
+        $title = trim((string) ($block['title'] ?? 'Interactive Telemetry Calculator'));
+        $summary = trim((string) ($block['summary'] ?? ''));
+        $ctaLabel = trim((string) ($block['cta_label'] ?? 'Open Interactive Calculator'));
+
+        return "> **Interactive Toolkit — {$title}:** {$summary} ([{$ctaLabel}](/calculators?tab={$tab}))";
+    }
+
+    /**
+     * @param  array<string, mixed>  $block
+     */
+    private function renderMarkdownQuote(array $block): string
+    {
+        $text = trim((string) ($block['text'] ?? ''));
+        if ($text === '') {
+            return '';
+        }
+
+        $source = trim((string) ($block['source'] ?? 'Source Attribution'));
+        $citeUrl = trim((string) ($block['cite_url'] ?? ''));
+        $citeSuffix = $this->isSafeUrl($citeUrl) ? " ({$citeUrl})" : '';
+
+        return "> \"{$text}\"\n> — {$source}{$citeSuffix}";
+    }
+
+    /**
+     * @param  array<string, mixed>  $block
+     */
+    private function renderMarkdownCode(array $block): string
+    {
+        $caption = trim((string) ($block['caption'] ?? 'Code & Telemetry Reference'));
+        $language = preg_replace('/[^a-z0-9_-]/i', '', (string) ($block['language'] ?? 'json')) ?: 'plaintext';
+        $code = (string) ($block['code'] ?? '');
+        if (trim($code) === '') {
+            return '';
+        }
+
+        return "### {$caption}\n\n```{$language}\n{$code}\n```";
+    }
+
+    /**
+     * @param  array<string, mixed>  $block
+     */
+    private function renderMarkdownStatGrid(array $block): string
+    {
+        $title = trim((string) ($block['title'] ?? 'Telemetry Summary'));
+        $items = is_array($block['items'] ?? null) ? $block['items'] : [];
+        if ($items === []) {
+            return '';
+        }
+
+        $lines = ["### {$title}", ''];
+        foreach ($items as $item) {
+            $label = trim((string) ($item['label'] ?? ''));
+            $value = trim((string) ($item['value'] ?? ''));
+            $note = trim((string) ($item['note'] ?? ''));
+            if ($label === '' || $value === '') {
+                continue;
+            }
+            $noteSuffix = $note !== '' ? " — {$note}" : '';
+            $lines[] = "- **{$label}:** {$value}{$noteSuffix}";
+        }
+
+        return count($lines) > 2 ? implode("\n", $lines) : '';
     }
 
     /**

@@ -375,7 +375,7 @@
                     </div>
                 </div>
                 <p class="mt-3 text-center text-xs text-slate-500">
-                    {{ $this->seoAnalysis['word_count'] }} words &bull; ~{{ $this->seoAnalysis['reading_time_minutes'] }} min read
+                    {{ $this->seoAnalysis['word_count'] }} words &bull; ~{{ $this->seoAnalysis['reading_time_minutes'] }} min read &bull; AI GEO <strong class="font-semibold text-[#be185d]">{{ $this->seoAnalysis['geo_score'] }}/100</strong>
                 </p>
 
                 <!-- Inspector Subtabs -->

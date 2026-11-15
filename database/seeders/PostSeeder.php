@@ -186,7 +186,7 @@ final class PostSeeder extends Seeder
                     ],
                     [
                         'type' => 'paragraph',
-                        'text' => 'Where Take-Two can smoothly raise average revenue per buyer is through tiered editions. Packaging cosmetic bundles, early story cash boosts, or future online starter packs inside a $89.99 or $99.99 Deluxe SKU mirrors Red Dead Redemption 2. High-margin physical memorabilia remains reserved for scarce Collector boxes. Compare every modeled tier on our [editions overview](/editions).',
+                        'text' => 'Where Take-Two can smoothly raise average revenue per buyer is through tiered editions. Packaging cosmetic bundles, early story cash boosts, or future online starter packs inside a $89.99 or $99.99 Deluxe SKU mirrors Red Dead Redemption 2. High-margin physical memorabilia remains reserved for scarce Collector boxes. Compare every modeled tier on our [editions overview](/prices-editions).',
                     ],
                     [
                         'type' => 'paragraph',
@@ -315,7 +315,7 @@ final class PostSeeder extends Seeder
                     ],
                     [
                         'type' => 'paragraph',
-                        'text' => 'Vice City forms the neon-lit metropolitan core across pastel Ocean Beach hotels, Little Cuba street bakeries, bustling Vice Port terminals, and Crosstown rail links. Southward, causeway bridges chain into the Leonida Keys, a tropical archipelago where shallow turquoise reefs hide smuggling routes. Explore every coordinate inside our [interactive Leonida atlas](/map).',
+                        'text' => 'Vice City forms the neon-lit metropolitan core across pastel Ocean Beach hotels, Little Cuba street bakeries, bustling Vice Port terminals, and Crosstown rail links. Southward, causeway bridges chain into the Leonida Keys, a tropical archipelago where shallow turquoise reefs hide smuggling routes. Explore every coordinate inside our [interactive Leonida atlas](/map-atlas).',
                     ],
                     [
                         'type' => 'paragraph',

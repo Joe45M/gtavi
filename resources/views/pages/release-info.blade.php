@@ -8,7 +8,7 @@
         <h1 id="main-heading" tabindex="-1" class="mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
             GTA VI Release Info &amp; Verified Timeline
         </h1>
-        <p class="mt-3 max-w-3xl text-base leading-relaxed text-slate-600">
+        <p class="article-lead-summary mt-3 max-w-3xl text-base leading-relaxed text-slate-600">
             GTAVI.PRO separates officially published Rockstar Games Newswire and Take-Two Interactive investor disclosures from industry release-cadence projections.
             <strong class="font-semibold text-slate-900">Not affiliated with Rockstar Games or Take-Two Interactive.</strong>
         </p>
@@ -25,7 +25,11 @@
                     <div class="flex flex-wrap items-center justify-between gap-3">
                         <div class="flex flex-wrap items-center gap-2.5">
                             <span class="rounded border border-slate-200 bg-[#f8f7fb] px-2.5 py-1 font-mono text-xs font-semibold text-[#2b124c]">
-                                {{ $milestone->display_date_label }}
+                                @if ($milestone->milestone_date)
+                                    <time datetime="{{ $milestone->milestone_date->toDateString() }}">{{ $milestone->display_date_label }}</time>
+                                @else
+                                    {{ $milestone->display_date_label }}
+                                @endif
                             </span>
                             <span class="rounded px-2.5 py-0.5 text-xs font-semibold {{ $milestone->is_confirmed ? 'border border-emerald-200 bg-emerald-50 text-emerald-800' : 'border border-purple-200 bg-purple-50 text-[#2b124c]' }}">
                                 {{ $milestone->is_confirmed ? 'Verified Filing / Announcement' : 'Projected Tracker' }}

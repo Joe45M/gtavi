@@ -21,6 +21,25 @@
     <meta name="robots" content="{{ $meta['robots'] ?? 'index, follow' }}">
     <link rel="canonical" href="{{ $meta['canonical'] }}">
 
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="alternate" type="application/rss+xml" title="GTAVI.PRO Technical Dispatches RSS" href="{{ route('seo.feed') }}">
+    <link rel="alternate" type="text/plain" title="LLMs Index" href="{{ route('seo.llms') }}">
+    <link rel="alternate" type="text/plain" title="LLMs Full Corpus" href="{{ route('seo.llms-full') }}">
+    @if (!empty($meta['markdown_url']))
+        <link rel="alternate" type="text/markdown" title="Markdown Twin for AI & LLMs" href="{{ $meta['markdown_url'] }}">
+    @endif
+
+    @if (file_exists(public_path('build/fonts-manifest.json')))
+        @php
+            $fontsManifest = json_decode((string) file_get_contents(public_path('build/fonts-manifest.json')), true);
+            $fontPreloads = collect($fontsManifest['preloads'] ?? [])->whereIn('weight', [400, 600]);
+        @endphp
+        @foreach ($fontPreloads as $preload)
+            <link rel="preload" href="/build/{{ $preload['file'] }}" as="font" type="{{ $preload['type'] ?? 'font/woff2' }}" crossorigin>
+        @endforeach
+    @endif
+
     <!-- OpenGraph -->
     <meta property="og:site_name" content="GTAVI.PRO">
     <meta property="og:type" content="{{ $meta['og_type'] ?? 'website' }}">
@@ -28,11 +47,21 @@
     <meta property="og:description" content="{{ $meta['og_description'] ?? $meta['description'] }}">
     <meta property="og:url" content="{{ $meta['canonical'] }}">
     <meta property="og:locale" content="en_US">
+    @if (!empty($meta['og_image']))
+        <meta property="og:image" content="{{ $meta['og_image'] }}">
+        <meta property="og:image:width" content="{{ $meta['og_image_width'] ?? 1200 }}">
+        <meta property="og:image:height" content="{{ $meta['og_image_height'] ?? 630 }}">
+        <meta property="og:image:alt" content="{{ $meta['og_image_alt'] ?? $meta['title'] }}">
+    @endif
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ $meta['og_title'] ?? $meta['title'] }}">
     <meta name="twitter:description" content="{{ $meta['og_description'] ?? $meta['description'] }}">
+    @if (!empty($meta['og_image']))
+        <meta name="twitter:image" content="{{ $meta['og_image'] }}">
+        <meta name="twitter:image:alt" content="{{ $meta['og_image_alt'] ?? $meta['title'] }}">
+    @endif
 
     @if (!empty($meta['json_ld']))
         <script type="application/ld+json">{!! json_encode($meta['json_ld'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>
@@ -217,8 +246,11 @@
                     <ul class="mt-3 space-y-2 text-sm">
                         <li><a href="{{ route('disclaimer') }}" class="text-slate-300 hover:text-white">Legal Non-Affiliation Notice</a></li>
                         <li><a href="{{ route('seo.sitemap') }}" class="text-slate-300 hover:text-white">XML Sitemap (/sitemap.xml)</a></li>
+                        <li><a href="{{ route('seo.feed') }}" class="text-slate-300 hover:text-white">RSS 2.0 Feed (/feed.xml)</a></li>
                         <li><a href="{{ route('seo.robots') }}" class="text-slate-300 hover:text-white">Robots Policy (/robots.txt)</a></li>
                         <li><a href="{{ route('seo.llms') }}" class="text-slate-300 hover:text-white">LLMs Index (/llms.txt)</a></li>
+                        <li><a href="{{ route('seo.llms-full') }}" class="text-slate-300 hover:text-white">LLMs Full Corpus (/llms-full.txt)</a></li>
+                        <li><a href="{{ route('seo.openapi') }}" class="text-slate-300 hover:text-white">OpenAPI Spec (/openapi.json)</a></li>
                         <li><a href="{{ route('api.v1.posts.index') }}" class="text-slate-300 hover:text-white">JSON API v1 (/api/v1/posts)</a></li>
                     </ul>
                 </div>
@@ -282,5 +314,33 @@
     </dialog>
 
     @livewireScripts
+    <script type="speculationrules">
+    {
+      "prerender": [
+        {
+          "where": {
+            "and": [
+              { "href_matches": "/*" },
+              { "not": { "href_matches": "/studio*" } },
+              { "not": { "href_matches": "/admin*" } },
+              { "not": { "href_matches": "/login*" } },
+              { "not": { "href_matches": "/logout*" } },
+              { "not": { "href_matches": "/api/*" } },
+              { "not": { "href_matches": "*.md" } }
+            ]
+          },
+          "eagerness": "moderate"
+        }
+      ],
+      "prefetch": [
+        {
+          "where": {
+            "href_matches": "/gta/*"
+          },
+          "eagerness": "conservative"
+        }
+      ]
+    }
+    </script>
 </body>
 </html>
