@@ -1,0 +1,338 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use App\Models\Post;
+use App\Models\User;
+use Illuminate\Console\Command;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Http;
+use Tests\TestCase;
+
+final class GeminiArticleGenerationTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed();
+    }
+
+    public function test_daily_command_generates_both_news_and_evergreen_seo_articles(): void
+    {
+        Config::set('services.gemini.api_key', 'test-gemini-key-123');
+        Config::set('services.gemini.model', 'gemini-flash-latest');
+
+        $initialPostCount = Post::query()->count();
+
+        $newsPayload = $this->buildLongFormArticlePayload(
+            title: 'Take-Two Reaffirms GTA VI November 2026 Launch Window in Quarterly Call',
+            slug: 'take-two-reaffirms-gta-vi-november-2026-launch-window',
+            focusKeyword: 'GTA VI November 2026 launch',
+            categorySlug: 'release-take-two-filings',
+            schemaType: 'NewsArticle',
+            verificationBadge: 'official_filing',
+            targetParagraphWords: 920,
+        );
+
+        $evergreenPayload = $this->buildLongFormArticlePayload(
+            title: 'GTA VI 60 FPS Performance Modes: PSSR & RAGE 9 Scaling on PS5 Pro',
+            slug: 'gta-vi-60-fps-performance-modes-pssr-rage-9',
+            focusKeyword: 'GTA VI 60 FPS',
+            categorySlug: 'hardware-specs-download-math',
+            schemaType: 'TechArticle',
+            verificationBadge: 'technical_projection',
+            targetParagraphWords: 940,
+        );
+
+        $callIndex = 0;
+
+        Http::fake(function (Request $request) use (&$callIndex, $newsPayload, $evergreenPayload) {
+            $this->assertSame('test-gemini-key-123', $request->header('X-goog-api-key')[0] ?? '');
+            $callIndex++;
+
+            if ($callIndex === 1) {
+                $this->assertArrayHasKey('tools', $request->data());
+
+                return Http::response([
+                    'modelVersion' => 'gemini-2.5-flash',
+                    'candidates' => [
+                        [
+                            'content' => [
+                                'parts' => [
+                                    ['text' => json_encode($newsPayload, JSON_THROW_ON_ERROR)],
+                                ],
+                            ],
+                            'groundingMetadata' => [
+                                'webSearchQueries' => ['Take-Two GTA VI release'],
+                            ],
+                        ],
+                    ],
+                    'usageMetadata' => [
+                        'promptTokenCount' => 1200,
+                        'candidatesTokenCount' => 1800,
+                        'thoughtsTokenCount' => 400,
+                    ],
+                ], 200);
+            }
+
+            $this->assertArrayNotHasKey('tools', $request->data());
+
+            return Http::response([
+                'modelVersion' => 'gemini-2.5-flash',
+                'candidates' => [
+                    [
+                        'content' => [
+                            'parts' => [
+                                ['text' => json_encode($evergreenPayload, JSON_THROW_ON_ERROR)],
+                            ],
+                        ],
+                    ],
+                ],
+                'usageMetadata' => [
+                    'promptTokenCount' => 1000,
+                    'candidatesTokenCount' => 1600,
+                    'thoughtsTokenCount' => 200,
+                ],
+            ], 200);
+        });
+
+        $this->artisan('gta:generate-daily-articles')
+            ->expectsOutputToContain('Total Estimated Run Cost: $0.045660 USD (6,200 tokens)')
+            ->assertExitCode(Command::SUCCESS);
+
+        Http::assertSentCount(2);
+        $this->assertSame($initialPostCount + 2, Post::query()->count());
+
+        $newsPost = Post::query()->where('slug', 'take-two-reaffirms-gta-vi-november-2026-launch-window')->firstOrFail();
+        $evergreenPost = Post::query()->where('slug', 'gta-vi-60-fps-performance-modes-pssr-rage-9')->firstOrFail();
+
+        $this->assertSame('NewsArticle', $newsPost->schema_type);
+        $this->assertSame('TechArticle', $evergreenPost->schema_type);
+
+        $this->assertSame('gemini-2.5-flash', $newsPost->ai_model);
+        $this->assertSame(1200, $newsPost->ai_prompt_tokens);
+        $this->assertSame(1800, $newsPost->ai_completion_tokens);
+        $this->assertSame(400, $newsPost->ai_thinking_tokens);
+        $this->assertSame(1, $newsPost->ai_search_queries);
+        $this->assertSame(3400, $newsPost->totalAiTokens());
+        $this->assertEqualsWithDelta(0.04086, $newsPost->ai_estimated_cost_usd, 0.00001);
+        $this->assertSame('$0.0409', $newsPost->formattedAiCost());
+
+        $this->assertSame(1000, $evergreenPost->ai_prompt_tokens);
+        $this->assertSame(1600, $evergreenPost->ai_completion_tokens);
+        $this->assertSame(200, $evergreenPost->ai_thinking_tokens);
+        $this->assertSame(0, $evergreenPost->ai_search_queries);
+        $this->assertSame(2800, $evergreenPost->totalAiTokens());
+        $this->assertEqualsWithDelta(0.0048, $evergreenPost->ai_estimated_cost_usd, 0.00001);
+        $this->assertSame('$0.0048', $evergreenPost->formattedAiCost());
+
+        foreach ([$newsPost, $evergreenPost] as $post) {
+            $this->assertSame('published', $post->status);
+            $this->assertGreaterThanOrEqual(800, $post->word_count);
+            $this->assertLessThanOrEqual(1500, $post->word_count);
+            $this->assertGreaterThanOrEqual(95, $post->seo_score);
+            $this->assertGreaterThanOrEqual(85, $post->readability_score);
+            $this->assertNotEmpty($post->faq_items);
+            $this->assertGreaterThanOrEqual(3, $post->tags()->count());
+            $this->assertGreaterThanOrEqual(35, mb_strlen((string) $post->meta_title));
+            $this->assertLessThanOrEqual(68, mb_strlen((string) $post->meta_title));
+            $this->assertGreaterThanOrEqual(115, mb_strlen((string) $post->meta_description));
+            $this->assertLessThanOrEqual(165, mb_strlen((string) $post->meta_description));
+
+            $response = $this->get('/gta/'.$post->slug);
+            $response->assertStatus(200);
+            $response->assertSee($post->featured_image_label);
+            $response->assertSee($post->schema_type);
+            $response->assertSee('application/ld+json', false);
+        }
+
+        $admin = User::query()->where('email', 'admin@gtavi.pro')->firstOrFail();
+        $studioResponse = $this->actingAs($admin)->get(route('studio.index'));
+        $studioResponse->assertStatus(200);
+        $studioResponse->assertSee('AI: $0.0409');
+        $studioResponse->assertSee('AI: $0.0048');
+    }
+
+    public function test_normalizer_enforces_word_count_and_seo_bounds_on_short_gemini_payload(): void
+    {
+        Config::set('services.gemini.api_key', 'test-gemini-key-123');
+
+        $minimalPayload = [
+            'title' => 'Rockstar Reveals New Trailer 3 Details for Vice City',
+            'focus_keyword' => 'GTA VI Trailer 3',
+            'category_slug' => 'trailer-rage-9-analysis',
+            'excerpt' => 'Short summary.',
+            'meta_title' => 'Short',
+            'meta_description' => 'Too short.',
+            'content_blocks' => [
+                [
+                    'type' => 'paragraph',
+                    'text' => str_repeat('Rockstar Games showcased dense crowds running across Vice Beach with realistic ray-traced lighting and fluid NPC AI behavior on PlayStation 5 hardware. ', 7),
+                ],
+            ],
+        ];
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [
+                    [
+                        'content' => [
+                            'parts' => [
+                                ['text' => json_encode($minimalPayload, JSON_THROW_ON_ERROR)],
+                            ],
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $this->artisan('gta:generate-daily-articles --type=news --status=draft')
+            ->assertExitCode(Command::SUCCESS);
+
+        $post = Post::query()->latest('id')->firstOrFail();
+
+        $this->assertSame('draft', $post->status);
+        $this->assertGreaterThan(0, $post->ai_prompt_tokens);
+        $this->assertGreaterThan(0, $post->ai_completion_tokens);
+        $this->assertGreaterThan(0.0, $post->ai_estimated_cost_usd);
+        $this->assertNotNull($post->formattedAiCost());
+        $this->assertGreaterThanOrEqual(800, $post->word_count);
+        $this->assertLessThanOrEqual(1500, $post->word_count);
+        $this->assertGreaterThanOrEqual(95, $post->seo_score);
+        $this->assertGreaterThanOrEqual(85, $post->readability_score);
+        $this->assertNotEmpty($post->faq_items);
+        $this->assertStringContainsString('gta-vi-trailer-3', $post->slug);
+
+        foreach ($post->content_blocks as $block) {
+            if (($block['type'] ?? '') === 'paragraph') {
+                $this->assertLessThanOrEqual(110, str_word_count((string) ($block['text'] ?? '')));
+            }
+        }
+    }
+
+    public function test_command_fails_cleanly_when_gemini_api_key_is_missing(): void
+    {
+        Config::set('services.gemini.api_key', '');
+        Http::fake();
+
+        $this->artisan('gta:generate-daily-articles --type=evergreen')
+            ->assertExitCode(Command::FAILURE);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_daily_article_schedule_is_registered(): void
+    {
+        $this->artisan('schedule:list')
+            ->expectsOutputToContain('gta:generate-daily-articles')
+            ->assertExitCode(Command::SUCCESS);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildLongFormArticlePayload(
+        string $title,
+        string $slug,
+        string $focusKeyword,
+        string $categorySlug,
+        string $schemaType,
+        string $verificationBadge,
+        int $targetParagraphWords,
+    ): array {
+        $unitSentence = "Engineers analyzing {$focusKeyword} note 165 GB NVMe streaming overhead at 5,500 MB/s across PlayStation 5 Pro and Xbox Series X hardware ahead of November 19, 2026. ";
+        $blocks = [
+            [
+                'type' => 'callout',
+                'tone' => 'disclaimer',
+                'title' => 'Independent Verification Notice',
+                'text' => 'GTAVI.PRO separates official Rockstar Games and Take-Two Interactive filings from independent hardware modeling.',
+            ],
+            [
+                'type' => 'paragraph',
+                'drop_cap' => true,
+                'text' => "Understanding {$focusKeyword} helps PlayStation 5, Xbox Series X, and future PC players prepare accurately for Grand Theft Auto VI across the State of Leonida. Rockstar Games confirmed November 19, 2026 for the console launch window. Explore updated milestone timelines on our [release tracker](/release-info).",
+            ],
+            [
+                'type' => 'heading',
+                'level' => 2,
+                'text' => "How Does {$focusKeyword} Affect Console Performance?",
+            ],
+        ];
+
+        $wordsAdded = 0;
+        while ($wordsAdded < $targetParagraphWords) {
+            $paragraph = trim($unitSentence.'RAGE 9 integrates ray-traced global illumination across Vice City, Leonida Keys, Grassrivers, Port Gellhorn, Ambrosia, and Mount Kalaga. Balanced 60 FPS modes prioritize clean PSSR upscaling alongside 16 GB GDDR6 memory stability.');
+            $blocks[] = [
+                'type' => 'paragraph',
+                'text' => $paragraph,
+            ];
+            $wordsAdded += str_word_count($paragraph);
+        }
+
+        $blocks[] = [
+            'type' => 'stat_grid',
+            'title' => 'Key Benchmark Summary',
+            'items' => [
+                ['label' => 'Console Date', 'value' => 'Nov 19, 2026', 'note' => 'Confirmed global launch'],
+                ['label' => 'NVMe Target', 'value' => '165 GB', 'note' => 'Projected install footprint'],
+                ['label' => 'Frame Pacing', 'value' => '30–60 FPS', 'note' => 'Quality & performance presets'],
+            ],
+        ];
+
+        $blocks[] = [
+            'type' => 'heading',
+            'level' => 2,
+            'text' => 'What Should Players Prepare Before Launch Week?',
+        ];
+        $blocks[] = [
+            'type' => 'paragraph',
+            'text' => 'Reserving 195 GB on PCIe 4.0 drives prevents storefront patch stalls when encrypted console packages unlock. Test fiber download windows inside our [interactive calculators](/calculators).',
+        ];
+        $blocks[] = [
+            'type' => 'quote',
+            'text' => 'Grand Theft Auto VI heads to the state of Leonida, home to Vice City and beyond.',
+            'source' => 'Take-Two Interactive Investor Release',
+            'cite_url' => 'https://www.rockstargames.com/VI',
+        ];
+        $blocks[] = [
+            'type' => 'faq',
+            'heading' => "{$focusKeyword} FAQs",
+            'items' => [
+                [
+                    'question' => "When does {$focusKeyword} apply to console players?",
+                    'answer' => 'All console readiness targets apply ahead of the November 19, 2026 release on PlayStation 5 and Xbox Series X|S.',
+                ],
+                [
+                    'question' => 'Does GTAVI.PRO track official Rockstar filings?',
+                    'answer' => 'Yes. Confirmed disclosures are tracked separately from independent hardware projections.',
+                ],
+            ],
+        ];
+
+        return [
+            'title' => $title,
+            'slug' => $slug,
+            'subtitle' => "Detailed telemetry breakdown examining {$focusKeyword} for PlayStation 5 and Xbox Series X|S.",
+            'excerpt' => "Analyze {$focusKeyword} benchmarks, NVMe headroom, and Rockstar Games milestones ahead of the November 19, 2026 launch.",
+            'category_slug' => $categorySlug,
+            'verification_badge' => $verificationBadge,
+            'schema_type' => $schemaType,
+            'focus_keyword' => $focusKeyword,
+            'meta_title' => "{$focusKeyword} Guide & Benchmarks | GTAVI.PRO",
+            'meta_description' => "Complete {$focusKeyword} technical guide covering Rockstar Games launch dates, PS5 Pro PSSR projections, NVMe speeds, and Leonida telemetry.",
+            'og_title' => "{$focusKeyword} Guide & Benchmarks | GTAVI.PRO",
+            'og_description' => "Complete {$focusKeyword} technical guide covering Rockstar Games launch dates and Leonida benchmarks.",
+            'featured_image_label' => 'GEMINI TELEMETRY // '.strtoupper($focusKeyword),
+            'featured_image_gradient' => 'from-cyan-500 via-purple-700 to-pink-700',
+            'tags' => ['GTA VI', 'RAGE 9', 'PS5 Pro', 'Leonida'],
+            'content_blocks' => $blocks,
+        ];
+    }
+}

@@ -88,6 +88,11 @@
                             <td>
                                 <span class="font-bold text-emerald-700">{{ $post->seo_score }}/100 SEO</span>
                                 <span class="block text-xs text-slate-500">{{ $post->readability_score }}/100 Read &bull; {{ $post->word_count }}w</span>
+                                @if ($post->formattedAiCost() !== null)
+                                    <span class="mt-0.5 block font-mono text-[11px] text-[#2b124c]">
+                                        AI: {{ $post->formattedAiCost() }} &bull; {{ number_format($post->totalAiTokens()) }} tok
+                                    </span>
+                                @endif
                             </td>
                             <td>{{ $post->revisions_count }}</td>
                             <td>

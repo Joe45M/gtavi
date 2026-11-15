@@ -64,6 +64,40 @@
                 </div>
             </header>
 
+            @php
+                $gradientPalette = [
+                    'from-fuchsia-600 via-purple-800 to-slate-950',
+                    'from-pink-600 via-rose-700 to-purple-950',
+                    'from-purple-600 via-violet-800 to-fuchsia-950',
+                    'from-violet-600 via-purple-900 to-indigo-950',
+                    'from-rose-600 via-pink-700 to-purple-950',
+                    'from-cyan-500 via-purple-700 to-pink-700',
+                    'from-pink-600 via-purple-700 to-indigo-950',
+                ];
+                $heroGradient = in_array($post->featured_image_gradient, $gradientPalette, true)
+                    ? $post->featured_image_gradient
+                    : 'from-pink-600 via-purple-700 to-indigo-950';
+            @endphp
+
+            <figure class="mt-6 overflow-hidden rounded-md border border-slate-200 shadow-xs">
+                <div class="bg-linear-to-r {{ $heroGradient }} px-6 py-7 text-white sm:px-8">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <span class="font-mono text-xs font-bold uppercase tracking-wider text-pink-100">
+                            {{ $post->featured_image_label ?: strtoupper($post->category->name).' // TELEMETRY BRIEFING' }}
+                        </span>
+                        <span class="rounded border border-white/25 bg-black/25 px-2.5 py-0.5 text-[11px] font-semibold text-white">
+                            {{ $post->verificationLabel() }}
+                        </span>
+                    </div>
+                    <p class="mt-3 text-xl font-bold leading-snug tracking-tight text-white sm:text-2xl">
+                        {{ $post->title }}
+                    </p>
+                    <p class="mt-2 text-xs font-medium text-purple-100/90">
+                        GTAVI.PRO Editorial Desk &bull; {{ $post->focus_keyword ?: $post->category->name }}
+                    </p>
+                </div>
+            </figure>
+
             <div class="article-prose mt-8">
                 {!! $renderedHtml !!}
             </div>

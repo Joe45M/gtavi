@@ -147,6 +147,12 @@ final readonly class PostService
                 'faq_items' => $faqItems,
                 'seo_score' => $analysis['seo_score'],
                 'readability_score' => $analysis['readability_score'],
+                'ai_model' => $payload['ai_model'] ?? $post?->ai_model,
+                'ai_prompt_tokens' => array_key_exists('ai_prompt_tokens', $payload) ? ($payload['ai_prompt_tokens'] !== null ? (int) $payload['ai_prompt_tokens'] : null) : $post?->ai_prompt_tokens,
+                'ai_completion_tokens' => array_key_exists('ai_completion_tokens', $payload) ? ($payload['ai_completion_tokens'] !== null ? (int) $payload['ai_completion_tokens'] : null) : $post?->ai_completion_tokens,
+                'ai_thinking_tokens' => array_key_exists('ai_thinking_tokens', $payload) ? ($payload['ai_thinking_tokens'] !== null ? (int) $payload['ai_thinking_tokens'] : null) : $post?->ai_thinking_tokens,
+                'ai_search_queries' => array_key_exists('ai_search_queries', $payload) ? ($payload['ai_search_queries'] !== null ? (int) $payload['ai_search_queries'] : null) : $post?->ai_search_queries,
+                'ai_estimated_cost_usd' => array_key_exists('ai_estimated_cost_usd', $payload) ? ($payload['ai_estimated_cost_usd'] !== null ? (float) $payload['ai_estimated_cost_usd'] : null) : $post?->ai_estimated_cost_usd,
                 'published_at' => $publishedAt,
             ];
 

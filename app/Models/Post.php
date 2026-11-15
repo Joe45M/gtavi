@@ -42,6 +42,12 @@ final class Post extends Model
         'faq_items',
         'seo_score',
         'readability_score',
+        'ai_model',
+        'ai_prompt_tokens',
+        'ai_completion_tokens',
+        'ai_thinking_tokens',
+        'ai_search_queries',
+        'ai_estimated_cost_usd',
         'view_count',
         'published_at',
     ];
@@ -103,6 +109,22 @@ final class Post extends Model
         };
     }
 
+    public function totalAiTokens(): int
+    {
+        return (int) ($this->ai_prompt_tokens ?? 0)
+            + (int) ($this->ai_completion_tokens ?? 0)
+            + (int) ($this->ai_thinking_tokens ?? 0);
+    }
+
+    public function formattedAiCost(): ?string
+    {
+        if ($this->ai_estimated_cost_usd === null) {
+            return null;
+        }
+
+        return '$'.number_format((float) $this->ai_estimated_cost_usd, 4);
+    }
+
     /**
      * @return array<string, string>
      */
@@ -116,6 +138,11 @@ final class Post extends Model
             'word_count' => 'integer',
             'seo_score' => 'integer',
             'readability_score' => 'integer',
+            'ai_prompt_tokens' => 'integer',
+            'ai_completion_tokens' => 'integer',
+            'ai_thinking_tokens' => 'integer',
+            'ai_search_queries' => 'integer',
+            'ai_estimated_cost_usd' => 'float',
             'view_count' => 'integer',
             'published_at' => 'datetime',
         ];

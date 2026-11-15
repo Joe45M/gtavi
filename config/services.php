@@ -35,4 +35,16 @@ return [
         ],
     ],
 
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-flash-latest'),
+        'endpoint' => env('GEMINI_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta/models'),
+        'timeout' => (int) env('GEMINI_TIMEOUT', 180),
+        'pricing' => [
+            'input_per_million' => (float) env('GEMINI_PRICE_INPUT_PER_1M', 0.30),
+            'output_per_million' => (float) env('GEMINI_PRICE_OUTPUT_PER_1M', 2.50),
+            'search_grounding_per_request' => (float) env('GEMINI_PRICE_SEARCH_PER_REQ', 0.035),
+        ],
+    ],
+
 ];
