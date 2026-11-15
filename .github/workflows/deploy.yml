@@ -1,0 +1,68 @@
+name: Deploy to GCP
+
+on:
+  workflow_dispatch:
+  # Optional: keep push trigger if you also want automatic deploys on main
+  # push:
+  #   branches:
+  #     - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node & Build Assets
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Compile Vite Assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Sync Compiled Assets to Server
+        run: |
+          mkdir -p public/build
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            public/build/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/dev/gta/public/build/
+
+      - name: Deploy Laravel App via SSH
+        env:
+          TARGET_BRANCH: ${{ github.ref_name }}
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "TARGET_BRANCH='$TARGET_BRANCH' bash -s" << 'EOF'
+            set -e
+            cd ~/dev/gta
+
+            php artisan down || true
+
+            git fetch origin "$TARGET_BRANCH"
+            git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
+            git reset --hard "origin/$TARGET_BRANCH"
+
+            composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+
+            php artisan migrate --force
+            php artisan optimize
+            php artisan storage:link || true
+
+            sudo chown -R joe:www-data storage bootstrap/cache
+            sudo chmod -R 775 storage bootstrap/cache
+
+            sudo systemctl reload php8.4-fpm
+            php artisan up
+          EOF
