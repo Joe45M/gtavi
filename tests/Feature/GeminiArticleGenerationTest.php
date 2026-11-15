@@ -48,12 +48,18 @@ final class GeminiArticleGenerationTest extends TestCase
             schemaType: 'TechArticle',
             verificationBadge: 'technical_projection',
             targetParagraphWords: 940,
+            interlinkSentence: 'Compare storage and decompression requirements in our [GTA VI download size guide](/gta/gta-vi-download-size-pre-load-math-ssd-guide).',
         );
 
         $callIndex = 0;
+        $capturedPrompts = [];
 
-        Http::fake(function (Request $request) use (&$callIndex, $newsPayload, $evergreenPayload) {
+        Http::fake(function (Request $request) use (&$callIndex, &$capturedPrompts, $newsPayload, $evergreenPayload) {
             $this->assertSame('test-gemini-key-123', $request->header('X-goog-api-key')[0] ?? '');
+            $promptText = (string) ($request->data()['contents'][0]['parts'][0]['text'] ?? '');
+            $this->assertStringContainsString('PREVIOUS 10 ARTICLES FOR CONTEXTUAL INTERLINKING', $promptText);
+            $this->assertStringContainsString('/gta/gta-vi-download-size-pre-load-math-ssd-guide', $promptText);
+            $capturedPrompts[] = $promptText;
             $callIndex++;
 
             if ($callIndex === 1) {
@@ -115,6 +121,8 @@ final class GeminiArticleGenerationTest extends TestCase
         $this->assertSame('NewsArticle', $newsPost->schema_type);
         $this->assertSame('TechArticle', $evergreenPost->schema_type);
 
+        $this->assertCount(2, $capturedPrompts);
+
         $this->assertSame('gemini-2.5-flash', $newsPost->ai_model);
         $this->assertSame(1200, $newsPost->ai_prompt_tokens);
         $this->assertSame(1800, $newsPost->ai_completion_tokens);
@@ -131,6 +139,9 @@ final class GeminiArticleGenerationTest extends TestCase
         $this->assertSame(2800, $evergreenPost->totalAiTokens());
         $this->assertEqualsWithDelta(0.0048, $evergreenPost->ai_estimated_cost_usd, 0.00001);
         $this->assertSame('$0.0048', $evergreenPost->formattedAiCost());
+
+        $this->assertStringContainsString('/gta/gta-vi-download-size-pre-load-math-ssd-guide', (string) $evergreenPost->rendered_html);
+        $this->assertMatchesRegularExpression('/href="[^"]*\/gta\/[a-z0-9-]+"/', (string) $newsPost->rendered_html);
 
         foreach ([$newsPost, $evergreenPost] as $post) {
             $this->assertSame('published', $post->status);
@@ -173,7 +184,7 @@ final class GeminiArticleGenerationTest extends TestCase
             'content_blocks' => [
                 [
                     'type' => 'paragraph',
-                    'text' => str_repeat('Rockstar Games showcased dense crowds running across Vice Beach with realistic ray-traced lighting and fluid NPC AI behavior on PlayStation 5 hardware. ', 7),
+                    'text' => str_repeat('Rockstar Games showcased dense crowds running across Vice Beach with realistic ray-traced lighting and fluid NPC AI behavior on PlayStation 5 hardware. ', 7).'Read more in our [GTA VI download telemetry report](/gta/non-existent-hallucinated-slug).',
                 ],
             ],
         ];
@@ -208,6 +219,15 @@ final class GeminiArticleGenerationTest extends TestCase
         $this->assertGreaterThanOrEqual(85, $post->readability_score);
         $this->assertNotEmpty($post->faq_items);
         $this->assertStringContainsString('gta-vi-trailer-3', $post->slug);
+        $this->assertStringNotContainsString('non-existent-hallucinated-slug', (string) $post->rendered_html);
+        $this->assertMatchesRegularExpression('/href="[^"]*\/gta\/[a-z0-9-]+"/', (string) $post->rendered_html);
+
+        $existingSlugs = Post::query()->pluck('slug')->all();
+        preg_match_all('/href="[^"]*\/gta\/([a-z0-9-]+)"/', (string) $post->rendered_html, $slugMatches);
+        $this->assertNotEmpty($slugMatches[1]);
+        foreach ($slugMatches[1] as $linkedSlug) {
+            $this->assertContains($linkedSlug, $existingSlugs);
+        }
 
         foreach ($post->content_blocks as $block) {
             if (($block['type'] ?? '') === 'paragraph') {
@@ -245,6 +265,7 @@ final class GeminiArticleGenerationTest extends TestCase
         string $schemaType,
         string $verificationBadge,
         int $targetParagraphWords,
+        string $interlinkSentence = '',
     ): array {
         $unitSentence = "Engineers analyzing {$focusKeyword} note 165 GB NVMe streaming overhead at 5,500 MB/s across PlayStation 5 Pro and Xbox Series X hardware ahead of November 19, 2026. ";
         $blocks = [
@@ -293,7 +314,7 @@ final class GeminiArticleGenerationTest extends TestCase
         ];
         $blocks[] = [
             'type' => 'paragraph',
-            'text' => 'Reserving 195 GB on PCIe 4.0 drives prevents storefront patch stalls when encrypted console packages unlock. Test fiber download windows inside our [interactive calculators](/calculators).',
+            'text' => trim('Reserving 195 GB on PCIe 4.0 drives prevents storefront patch stalls when encrypted console packages unlock. Test fiber download windows inside our [interactive calculators](/calculators). '.$interlinkSentence),
         ];
         $blocks[] = [
             'type' => 'quote',

@@ -149,6 +149,7 @@ final readonly class GeminiArticleService
 
         $categories = Category::query()->ordered()->get(['id', 'name', 'slug']);
         $existingPosts = Post::query()->latest('id')->get(['title', 'slug', 'focus_keyword']);
+        $recentArticles = $this->loadRecentArticlesForInterlinking();
 
         $selectedEvergreen = $mode === 'evergreen'
             ? $this->selectNextEvergreenTopic($existingPosts->pluck('slug')->all(), $topicOverride)
@@ -162,7 +163,8 @@ final readonly class GeminiArticleService
             categories: $categories->map(fn (Category $cat): array => [
                 'name' => $cat->name,
                 'slug' => $cat->slug,
-            ])->all()
+            ])->all(),
+            recentArticles: $recentArticles
         );
 
         $responseData = $this->callGeminiApi($apiKey, $prompt, $mode === 'news');
@@ -177,6 +179,7 @@ final readonly class GeminiArticleService
             fallbackKeyword: $selectedEvergreen['focus_keyword'] ?? null,
             fallbackCategorySlug: $selectedEvergreen['category_slug'] ?? null,
             groundingSources: $groundingSources,
+            recentArticles: $recentArticles,
         );
 
         $normalized = array_merge($normalized, $usage);
@@ -203,6 +206,7 @@ final readonly class GeminiArticleService
      *
      * @param  array<string, mixed>  $raw
      * @param  array<int, array{title: string, url: string}>  $groundingSources
+     * @param  array<int, array{title: string, slug: string, url: string, focus_keyword: string}>  $recentArticles
      * @return array<string, mixed>
      */
     public function normalizeAndEnrichPayload(
@@ -212,7 +216,11 @@ final readonly class GeminiArticleService
         ?string $fallbackKeyword = null,
         ?string $fallbackCategorySlug = null,
         array $groundingSources = [],
+        array $recentArticles = [],
     ): array {
+        if ($recentArticles === []) {
+            $recentArticles = $this->loadRecentArticlesForInterlinking();
+        }
         $categoriesBySlug = Category::query()->pluck('id', 'slug');
         $defaultCategorySlug = $mode === 'news' ? 'release-take-two-filings' : 'trailer-rage-9-analysis';
         $requestedCategorySlug = trim((string) ($raw['category_slug'] ?? ''));
@@ -296,7 +304,8 @@ final readonly class GeminiArticleService
             title: $title,
             groundingSources: $groundingSources,
             sourceName: trim((string) ($raw['source_name'] ?? '')),
-            sourceUrl: trim((string) ($raw['source_url'] ?? ''))
+            sourceUrl: trim((string) ($raw['source_url'] ?? '')),
+            recentArticles: $recentArticles,
         );
 
         $blocks = $this->enforceWordCountBounds($blocks, $focusKeyword, $mode, $title);
@@ -472,6 +481,7 @@ final readonly class GeminiArticleService
      * @param  array{topic: string, category_slug: string, focus_keyword: string}|null  $selectedEvergreen
      * @param  array<int, string>  $existingTitles
      * @param  array<int, array{name: string, slug: string}>  $categories
+     * @param  array<int, array{title: string, slug: string, url: string, focus_keyword: string}>  $recentArticles
      */
     private function buildPrompt(
         string $mode,
@@ -479,6 +489,7 @@ final readonly class GeminiArticleService
         ?array $selectedEvergreen,
         array $existingTitles,
         array $categories,
+        array $recentArticles = [],
     ): string {
         $today = now()->format('F j, Y');
         $existingList = $existingTitles !== []
@@ -489,6 +500,18 @@ final readonly class GeminiArticleService
             static fn (array $cat): string => "{$cat['slug']} ({$cat['name']})",
             $categories
         ));
+
+        $interlinkLines = $recentArticles !== []
+            ? implode("\n- ", array_map(
+                static fn (array $article): string => sprintf(
+                    '%s | Title: "%s"%s',
+                    $article['url'],
+                    $article['title'],
+                    $article['focus_keyword'] !== '' ? " | Topic: {$article['focus_keyword']}" : ''
+                ),
+                $recentArticles
+            ))
+            : 'None available yet';
 
         $gradientsList = implode(' | ', self::ALLOWED_GRADIENTS);
 
@@ -511,6 +534,9 @@ Today's date is {$today}. Confirmed launch timeline context: Rockstar Games conf
 EXISTING SITE HEADLINES (DO NOT DUPLICATE OR CLOSELY OVERLAP):
 - {$existingList}
 
+PREVIOUS 10 ARTICLES FOR CONTEXTUAL INTERLINKING (choose the 2-4 most relevant and weave natural Markdown links like [descriptive anchor](/gta/slug) inside paragraphs where contextually helpful; NEVER invent /gta/ slugs not listed below):
+- {$interlinkLines}
+
 VALID CATEGORY SLUGS (choose the single best match):
 - {$categoryLines}
 
@@ -527,9 +553,9 @@ STRICT LENGTH & SEO / AI-GEO RULES:
    - Keep sentences crisp (average 15-21 words per sentence).
    - Every `paragraph` block MUST stay between 55 and 95 words (never exceed 100 words in a single paragraph block).
    - Include 4 to 6 `heading` blocks (level 2 or 3), with at least two phrased as clear AI-answer headings starting with How, Why, What, or When (and ending with `?`).
-5. Rich Structured Blocks & Information Gain:
+5. Rich Structured Blocks & Contextual Interlinking:
    - Include at least 1 `callout` (`tone`: `"disclaimer"` or `"info"`), 1 `stat_grid` (3 numeric items with real units like GB, MB/s, FPS, km², $, %, 2026), 1 `spec_table`, 1 `quote` (external source attribution if citing news or Rockstar filings), 1 `calculator_embed` (`calculator_type` one of `download`, `pc`, `edition`, `map`), and 1 `faq` block with 3 concise Q&A items.
-   - Include 2-3 natural Markdown internal links inside paragraph text pointing to `/release-info`, `/download-sizes`, `/prices-editions`, `/map-atlas`, `/calculators`, or `/gta`.
+   - Include 2-4 natural Markdown internal links inside paragraph text pointing to relevant articles from the PREVIOUS 10 ARTICLES list (`/gta/slug`) alongside core reference hubs (`/release-info`, `/download-sizes`, `/prices-editions`, `/map-atlas`, `/calculators`). Only use exact `/gta/slug` paths listed above.
    - Ground the article across concrete GTA VI entities (Grand Theft Auto VI, Rockstar Games, Take-Two Interactive, Leonida, Vice City, PS5, Xbox Series X|S, RAGE 9).
 6. Visual Card Metadata:
    - Set `featured_image_label` (max 55 uppercase characters, e.g., "NEWS BRIEFING // NOVEMBER 2026 TELEMETRY").
@@ -675,6 +701,7 @@ PROMPT;
     /**
      * @param  array<int, mixed>  $rawBlocks
      * @param  array<int, array{title: string, url: string}>  $groundingSources
+     * @param  array<int, array{title: string, slug: string, url: string, focus_keyword: string}>  $recentArticles
      * @return array<int, array<string, mixed>>
      */
     private function normalizeBlocks(
@@ -685,6 +712,7 @@ PROMPT;
         array $groundingSources,
         string $sourceName,
         string $sourceUrl,
+        array $recentArticles = [],
     ): array {
         $blocks = [];
 
@@ -715,6 +743,7 @@ PROMPT;
         $blocks = $this->ensureLeadCalloutAndIntro($blocks, $focusKeyword, $mode, $title);
         $blocks = $this->ensureHeadingSignals($blocks, $focusKeyword, $title);
         $blocks = $this->ensureStructuredAndGeoSignals($blocks, $focusKeyword, $mode, $groundingSources, $sourceName, $sourceUrl);
+        $blocks = $this->ensureExistingArticleInterlinks($blocks, $recentArticles, $focusKeyword.' '.$title);
 
         return array_values($blocks);
     }
@@ -1186,6 +1215,197 @@ PROMPT;
         }
 
         return $blocks;
+    }
+
+    /**
+     * Load up to 10 recent posts to feed Gemini contextual internal linking targets.
+     *
+     * @return array<int, array{title: string, slug: string, url: string, focus_keyword: string}>
+     */
+    private function loadRecentArticlesForInterlinking(): array
+    {
+        $posts = Post::query()
+            ->published()
+            ->latest('published_at')
+            ->latest('id')
+            ->limit(10)
+            ->get(['title', 'slug', 'focus_keyword']);
+
+        if ($posts->isEmpty()) {
+            $posts = Post::query()
+                ->latest('id')
+                ->limit(10)
+                ->get(['title', 'slug', 'focus_keyword']);
+        }
+
+        return $posts
+            ->map(static fn (Post $post): array => [
+                'title' => $post->title,
+                'slug' => $post->slug,
+                'url' => '/gta/'.$post->slug,
+                'focus_keyword' => (string) ($post->focus_keyword ?? ''),
+            ])
+            ->all();
+    }
+
+    /**
+     * Validate generated /gta/{slug} interlinks and ensure every new article links to existing dispatches.
+     *
+     * @param  array<int, array<string, mixed>>  $blocks
+     * @param  array<int, array{title: string, slug: string, url: string, focus_keyword: string}>  $recentArticles
+     * @return array<int, array<string, mixed>>
+     */
+    private function ensureExistingArticleInterlinks(
+        array $blocks,
+        array $recentArticles,
+        string $topicContext,
+    ): array {
+        $knownSlugs = Post::query()->pluck('slug')->all();
+        foreach ($recentArticles as $article) {
+            $knownSlugs[] = $article['slug'];
+        }
+        $validSlugSet = array_flip(array_map('strtolower', array_unique(array_filter($knownSlugs))));
+
+        $validArticleLinksFound = 0;
+
+        foreach ($blocks as $idx => $block) {
+            if (($block['type'] ?? '') !== 'paragraph') {
+                continue;
+            }
+
+            $text = (string) ($block['text'] ?? '');
+            $updated = preg_replace_callback(
+                '/\[([^\]]+)\]\((?:https?:\/\/gtavi\.pro)?(\/gta\/(?!category\/|tag\/)([a-z0-9-]+)(?:\.md)?)\)/i',
+                function (array $matches) use ($validSlugSet, $recentArticles, &$validArticleLinksFound): string {
+                    $anchor = $matches[1];
+                    $matchedSlug = strtolower($matches[3]);
+
+                    if (isset($validSlugSet[$matchedSlug])) {
+                        $validArticleLinksFound++;
+
+                        return "[{$anchor}](/gta/{$matchedSlug})";
+                    }
+
+                    if ($recentArticles !== []) {
+                        $best = $this->pickBestMatchingArticles($recentArticles, $anchor, 1)[0];
+                        $validArticleLinksFound++;
+
+                        return "[{$anchor}]({$best['url']})";
+                    }
+
+                    return "[{$anchor}](/gta)";
+                },
+                $text
+            );
+
+            if (is_string($updated)) {
+                $blocks[$idx]['text'] = $updated;
+            }
+        }
+
+        if ($validArticleLinksFound > 0 || $recentArticles === []) {
+            return $blocks;
+        }
+
+        $targets = $this->pickBestMatchingArticles($recentArticles, $topicContext, 2);
+        $interlinkSentence = count($targets) >= 2
+            ? sprintf(
+                'Related GTAVI.PRO coverage includes [%s](%s) and [%s](%s) for additional context.',
+                $targets[0]['title'],
+                $targets[0]['url'],
+                $targets[1]['title'],
+                $targets[1]['url']
+            )
+            : sprintf(
+                'Explore related coverage in [%s](%s) on GTAVI.PRO.',
+                $targets[0]['title'],
+                $targets[0]['url']
+            );
+
+        $sentenceWords = str_word_count($interlinkSentence);
+        $paragraphIndices = [];
+        foreach ($blocks as $idx => $block) {
+            if (($block['type'] ?? '') === 'paragraph') {
+                $paragraphIndices[] = $idx;
+            }
+        }
+
+        foreach (array_reverse($paragraphIndices) as $pIdx) {
+            if ($pIdx === ($paragraphIndices[0] ?? -1)) {
+                continue;
+            }
+            $existingText = trim((string) ($blocks[$pIdx]['text'] ?? ''));
+            if ((str_word_count($existingText) + $sentenceWords) <= 95) {
+                $blocks[$pIdx]['text'] = $existingText.' '.$interlinkSentence;
+
+                return $blocks;
+            }
+        }
+
+        $newParagraph = [
+            'id' => (string) Str::uuid(),
+            'type' => 'paragraph',
+            'drop_cap' => false,
+            'text' => $interlinkSentence.' Compare these verified details alongside active hardware and release projections across our editorial desk.',
+        ];
+
+        $faqIndex = null;
+        foreach ($blocks as $idx => $block) {
+            if (($block['type'] ?? '') === 'faq') {
+                $faqIndex = $idx;
+                break;
+            }
+        }
+
+        if ($faqIndex !== null) {
+            array_splice($blocks, $faqIndex, 0, [$newParagraph]);
+        } else {
+            $blocks[] = $newParagraph;
+        }
+
+        return array_values($blocks);
+    }
+
+    /**
+     * Rank recent articles by keyword overlap against a given topic or anchor phrase.
+     *
+     * @param  array<int, array{title: string, slug: string, url: string, focus_keyword: string}>  $recentArticles
+     * @return array<int, array{title: string, slug: string, url: string, focus_keyword: string}>
+     */
+    private function pickBestMatchingArticles(array $recentArticles, string $queryText, int $limit): array
+    {
+        $queryTokens = preg_split('/\W+/', mb_strtolower($queryText), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $stopWords = ['the', 'and', 'for', 'with', 'gta', 'vi', 'guide', 'news', 'analysis', 'from', 'into'];
+        $meaningfulTokens = array_values(array_diff($queryTokens, $stopWords));
+
+        $scored = [];
+        foreach ($recentArticles as $index => $article) {
+            $haystack = mb_strtolower($article['title'].' '.$article['focus_keyword'].' '.$article['slug']);
+            $score = 0;
+            foreach ($meaningfulTokens as $token) {
+                if (mb_strlen($token) >= 3 && str_contains($haystack, $token)) {
+                    $score += 2;
+                }
+            }
+            $scored[] = [
+                'article' => $article,
+                'score' => $score,
+                'index' => $index,
+            ];
+        }
+
+        usort($scored, static function (array $a, array $b): int {
+            if ($a['score'] !== $b['score']) {
+                return $b['score'] <=> $a['score'];
+            }
+
+            return $a['index'] <=> $b['index'];
+        });
+
+        return array_map(
+            static fn (array $row): array => $row['article'],
+            array_slice($scored, 0, $limit)
+        );
     }
 
     /**
