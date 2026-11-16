@@ -29,6 +29,9 @@ final class RoleAndPermissionSeeder extends Seeder
             Permission::findOrCreate($permissionName, 'web');
         }
 
+        $superAdminRole = Role::findOrCreate('super-admin', 'web');
+        $superAdminRole->syncPermissions($permissions);
+
         $adminRole = Role::findOrCreate('admin', 'web');
         $adminRole->syncPermissions($permissions);
 

@@ -5,7 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\StudiosController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth', 'role_or_permission:admin|editor|access studio'])->group(function (): void {
+Route::middleware(['auth', 'role_or_permission:super-admin|admin|editor|access studio'])->group(function (): void {
     Route::get('/admin', [StudiosController::class, 'index'])->name('admin.index');
 
     Route::prefix('studio')->name('studio.')->group(function (): void {
@@ -13,6 +13,9 @@ Route::middleware(['auth', 'role_or_permission:admin|editor|access studio'])->gr
         Route::get('/create', [StudiosController::class, 'create'])
             ->middleware('permission:create posts')
             ->name('create');
+        Route::post('/generate-ai', [StudiosController::class, 'generateAi'])
+            ->middleware('permission:create posts')
+            ->name('generate-ai');
         Route::post('/', [StudiosController::class, 'store'])
             ->middleware('permission:create posts')
             ->name('store');

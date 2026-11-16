@@ -16,6 +16,84 @@
         </div>
     @endif
 
+    @can('create posts')
+        <!-- Gemini AI Article Generator Inside Studio Editor -->
+        <section aria-labelledby="editor-ai-assistant-heading" class="mb-6 rounded-md border border-slate-200 border-l-3 border-l-[#2b124c] bg-white p-4 shadow-xs sm:p-5">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <h2 id="editor-ai-assistant-heading" class="text-sm font-bold text-slate-900">
+                        Gemini AI Post Creator
+                    </h2>
+                    <p id="editor-ai-topic-help" class="text-xs text-slate-600">
+                        Generate a full 800&ndash;1,500 word SEO dispatch directly into this editor canvas (with interlinks, FAQs, and telemetry).
+                    </p>
+                </div>
+                <span wire:loading wire:target="generateWithAi" class="inline-flex items-center rounded bg-purple-100 px-2.5 py-1 text-xs font-semibold text-[#2b124c]">
+                    Generating article with Gemini...
+                </span>
+            </div>
+
+            <div class="mt-4 grid gap-4 lg:grid-cols-12 lg:items-end">
+                <fieldset class="lg:col-span-3">
+                    <legend class="text-xs font-semibold uppercase tracking-wide text-slate-700">AI Mode</legend>
+                    <div class="mt-1.5 grid grid-cols-2 gap-2">
+                        @foreach (['evergreen' => 'Evergreen', 'news' => 'Latest News'] as $modeVal => $modeTxt)
+                            <label
+                                for="editor-ai-mode-{{ $modeVal }}"
+                                class="flex min-h-[44px] cursor-pointer items-center gap-2 rounded border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-800 has-[:checked]:border-[#2b124c] has-[:checked]:bg-purple-50 has-[:checked]:text-[#2b124c]"
+                            >
+                                <input
+                                    id="editor-ai-mode-{{ $modeVal }}"
+                                    type="radio"
+                                    value="{{ $modeVal }}"
+                                    wire:model="aiMode"
+                                    class="h-4 w-4 accent-[#2b124c]"
+                                >
+                                <span>{{ $modeTxt }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+                </fieldset>
+
+                <div class="lg:col-span-5">
+                    <label for="editor-ai-topic" class="block text-xs font-semibold uppercase tracking-wide text-slate-700">
+                        Topic or News Angle <span class="font-normal text-slate-500">(Optional)</span>
+                    </label>
+                    <input
+                        id="editor-ai-topic"
+                        type="text"
+                        maxlength="180"
+                        wire:model="aiTopic"
+                        aria-describedby="editor-ai-topic-help"
+                        placeholder="e.g. PS5 Pro PSSR 60 FPS projection or latest Rockstar update"
+                        class="mt-1.5 min-h-[44px] w-full rounded border border-slate-400 bg-white px-3.5 py-2 text-sm text-slate-900 focus:border-[#2b124c] focus:outline-2 focus:outline-[#2b124c]"
+                    >
+                </div>
+
+                <div class="flex flex-wrap gap-2 lg:col-span-4 lg:justify-end">
+                    <button
+                        type="button"
+                        wire:click="generateWithAi('draft')"
+                        wire:loading.attr="disabled"
+                        wire:target="generateWithAi"
+                        class="min-h-[44px] cursor-pointer rounded border border-[#2b124c] bg-white px-4 py-2 text-xs font-semibold text-[#2b124c] transition hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        Generate AI Draft
+                    </button>
+                    <button
+                        type="button"
+                        wire:click="generateWithAi('published')"
+                        wire:loading.attr="disabled"
+                        wire:target="generateWithAi"
+                        class="min-h-[44px] cursor-pointer rounded bg-[#be185d] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#9d174d] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        Generate &amp; Publish
+                    </button>
+                </div>
+            </div>
+        </section>
+    @endcan
+
     <!-- WordPress-Style Top Action Bar -->
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-white p-4 shadow-xs">
         <div class="flex flex-wrap items-center gap-2">

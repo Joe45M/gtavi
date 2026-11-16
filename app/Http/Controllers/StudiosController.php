@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\GenerateAiPostRequest;
 use App\Http\Requests\StorePostRequest;
 use App\Http\Requests\UpdatePostRequest;
 use App\Models\Post;
+use App\Services\GeminiArticleService;
 use App\Services\PostService;
 use App\Services\SeoService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 final readonly class StudiosController
 {
@@ -88,6 +92,83 @@ final readonly class StudiosController
         return redirect()
             ->route('studio.edit', $updated)
             ->with('status', 'Dispatch updated and revision snapshot stored.');
+    }
+
+    public function generateAi(GenerateAiPostRequest $request, GeminiArticleService $geminiArticleService): RedirectResponse
+    {
+        $validated = $request->validated();
+        $mode = (string) $validated['mode'];
+        $status = (string) $validated['status'];
+        $rawTopic = trim((string) ($validated['topic'] ?? ''));
+        $topic = $rawTopic !== '' ? $rawTopic : null;
+        $modes = $mode === 'both' ? ['news', 'evergreen'] : [$mode];
+        $createdPosts = [];
+
+        try {
+            foreach ($modes as $generationMode) {
+                $createdPosts[] = $geminiArticleService->generateAndCreatePost(
+                    mode: $generationMode,
+                    topicOverride: $topic,
+                    status: $status,
+                );
+            }
+        } catch (Throwable $exception) {
+            Log::error('Admin studio AI article generation failed.', [
+                'mode' => $mode,
+                'status' => $status,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return redirect()
+                ->route('studio.index')
+                ->withInput()
+                ->withErrors(['ai_generator' => $exception->getMessage()]);
+        }
+
+        if (count($createdPosts) === 1 && $status === 'draft') {
+            $post = $createdPosts[0];
+            $costLabel = $post->formattedAiCost() !== null ? ' • Est. Cost: '.$post->formattedAiCost() : '';
+
+            return redirect()
+                ->route('studio.edit', $post)
+                ->with('status', sprintf(
+                    'Gemini generated draft "%s" (%d words, %d/100 SEO, %s tokens%s). Review & publish when ready.',
+                    $post->title,
+                    $post->word_count,
+                    $post->seo_score,
+                    number_format($post->totalAiTokens()),
+                    $costLabel,
+                ));
+        }
+
+        if (count($createdPosts) === 1) {
+            $post = $createdPosts[0];
+            $costLabel = $post->formattedAiCost() !== null ? ' • Est. Cost: '.$post->formattedAiCost() : '';
+
+            return redirect()
+                ->route('studio.index')
+                ->with('status', sprintf(
+                    'Gemini generated & published "%s" (%d words, %d/100 SEO, %s tokens%s).',
+                    $post->title,
+                    $post->word_count,
+                    $post->seo_score,
+                    number_format($post->totalAiTokens()),
+                    $costLabel,
+                ));
+        }
+
+        $totalTokens = array_sum(array_map(static fn (Post $post): int => $post->totalAiTokens(), $createdPosts));
+        $totalCostUsd = array_sum(array_map(static fn (Post $post): float => (float) ($post->ai_estimated_cost_usd ?? 0.0), $createdPosts));
+
+        return redirect()
+            ->route('studio.index')
+            ->with('status', sprintf(
+                'Gemini generated %d %s articles (%s tokens • $%s USD est.).',
+                count($createdPosts),
+                $status,
+                number_format($totalTokens),
+                number_format($totalCostUsd, 4),
+            ));
     }
 
     public function destroy(Post $post): RedirectResponse

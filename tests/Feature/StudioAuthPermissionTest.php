@@ -9,7 +9,10 @@ use App\Models\Category;
 use App\Models\Post;
 use App\Models\PostRevision;
 use App\Models\User;
+use Illuminate\Console\Command;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -223,5 +226,60 @@ final class StudioAuthPermissionTest extends TestCase
         $editor->syncPermissions([]);
 
         $component->call('restoreRevision', $revision->id)->assertForbidden();
+    }
+
+    public function test_make_super_admin_command_creates_global_super_admin_with_unrestricted_access(): void
+    {
+        $this->artisan('gta:make-super-admin', [
+            '--name' => 'Joe Super Owner',
+            '--email' => 'JoeSuper@GTAVI.PRO',
+            '--password' => 'UltraStrongPass!2026',
+        ])
+            ->expectsOutputToContain('Global Super Admin [joesuper@gtavi.pro] is ready')
+            ->assertExitCode(Command::SUCCESS);
+
+        $superAdmin = User::query()->where('email', 'joesuper@gtavi.pro')->firstOrFail();
+
+        $this->assertSame('Joe Super Owner', $superAdmin->name);
+        $this->assertTrue(Hash::check('UltraStrongPass!2026', $superAdmin->password));
+        $this->assertTrue($superAdmin->hasRole('super-admin'));
+        $this->assertTrue($superAdmin->hasRole('admin'));
+        $this->assertTrue(Gate::forUser($superAdmin)->allows('any-unlisted-global-capability'));
+        $this->assertTrue($superAdmin->can('access studio'));
+        $this->assertTrue($superAdmin->can('create posts'));
+        $this->assertTrue($superAdmin->can('edit posts'));
+        $this->assertTrue($superAdmin->can('delete posts'));
+
+        $this->actingAs($superAdmin)->get('/admin')->assertOk()->assertSee('Gemini AI Post Creator');
+        $this->actingAs($superAdmin)->get('/studio')->assertOk();
+        $this->actingAs($superAdmin)->get('/studio/create')->assertOk();
+
+        $post = Post::query()->firstOrFail();
+        $this->actingAs($superAdmin)->delete('/studio/'.$post->id)->assertRedirect(route('studio.index'));
+        $this->assertModelMissing($post);
+    }
+
+    public function test_make_super_admin_command_promotes_existing_user_and_generates_password_when_omitted(): void
+    {
+        $existingUser = User::factory()->create([
+            'email' => 'promote-me@gtavi.pro',
+        ]);
+        $this->assertFalse($existingUser->hasRole('super-admin'));
+
+        $this->artisan('gta:make-super-admin', [
+            '--email' => 'promote-me@gtavi.pro',
+            '--no-interaction' => true,
+        ])
+            ->expectsOutputToContain('Generated Password')
+            ->assertExitCode(Command::SUCCESS);
+
+        $promoted = $existingUser->fresh();
+        $this->assertNotNull($promoted);
+        $this->assertTrue($promoted->hasRole('super-admin'));
+        $this->assertTrue(Gate::forUser($promoted)->allows('manage-global-platform'));
+
+        $this->artisan('gta:make-super-admin', [
+            '--email' => 'not-an-email',
+        ])->assertExitCode(Command::INVALID);
     }
 }

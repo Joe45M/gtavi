@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Livewire\StudioPostEditor;
 use App\Models\Post;
 use App\Models\User;
 use Illuminate\Console\Command;
@@ -11,6 +12,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 final class GeminiArticleGenerationTest extends TestCase
@@ -252,6 +254,186 @@ final class GeminiArticleGenerationTest extends TestCase
         $this->artisan('schedule:list')
             ->expectsOutputToContain('gta:generate-daily-articles')
             ->assertExitCode(Command::SUCCESS);
+    }
+
+    public function test_admin_can_generate_published_and_draft_ai_articles_from_studio_dashboard(): void
+    {
+        Config::set('services.gemini.api_key', 'test-gemini-key-123');
+        Config::set('services.gemini.model', 'gemini-flash-latest');
+
+        $admin = User::query()->where('email', 'admin@gtavi.pro')->firstOrFail();
+
+        $publishedPayload = $this->buildLongFormArticlePayload(
+            title: 'GTA VI Vice Port Smuggling Economy & Yacht Heist Payouts',
+            slug: 'gta-vi-vice-port-smuggling-economy-yacht-heist',
+            focusKeyword: 'Vice Port smuggling',
+            categorySlug: 'editions-pricing-pre-orders',
+            schemaType: 'BlogPosting',
+            verificationBadge: 'technical_projection',
+            targetParagraphWords: 910,
+        );
+
+        $draftNewsPayload = $this->buildLongFormArticlePayload(
+            title: 'Rockstar Sets GTA VI Trailer 3 Showcase Window for Leonida',
+            slug: 'rockstar-sets-gta-vi-trailer-3-showcase-window',
+            focusKeyword: 'GTA VI Trailer 3 showcase',
+            categorySlug: 'release-take-two-filings',
+            schemaType: 'NewsArticle',
+            verificationBadge: 'confirmed',
+            targetParagraphWords: 910,
+        );
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::sequence()
+                ->push([
+                    'modelVersion' => 'gemini-2.5-flash',
+                    'candidates' => [
+                        [
+                            'content' => [
+                                'parts' => [
+                                    ['text' => json_encode($publishedPayload, JSON_THROW_ON_ERROR)],
+                                ],
+                            ],
+                        ],
+                    ],
+                    'usageMetadata' => [
+                        'promptTokenCount' => 1100,
+                        'candidatesTokenCount' => 1700,
+                        'thoughtsTokenCount' => 150,
+                    ],
+                ], 200)
+                ->push([
+                    'modelVersion' => 'gemini-2.5-flash',
+                    'candidates' => [
+                        [
+                            'content' => [
+                                'parts' => [
+                                    ['text' => json_encode($draftNewsPayload, JSON_THROW_ON_ERROR)],
+                                ],
+                            ],
+                            'groundingMetadata' => [
+                                'webSearchQueries' => ['GTA VI Trailer 3 showcase'],
+                            ],
+                        ],
+                    ],
+                    'usageMetadata' => [
+                        'promptTokenCount' => 1250,
+                        'candidatesTokenCount' => 1650,
+                        'thoughtsTokenCount' => 250,
+                    ],
+                ], 200),
+        ]);
+
+        $publishResponse = $this->actingAs($admin)->post(route('studio.generate-ai'), [
+            'mode' => 'evergreen',
+            'topic' => 'Vice Port smuggling economy and yacht heist payouts',
+            'status' => 'published',
+        ]);
+
+        $publishResponse->assertRedirect(route('studio.index'));
+        $publishResponse->assertSessionHas('status');
+
+        $publishedPost = Post::query()->where('slug', 'gta-vi-vice-port-smuggling-economy-yacht-heist')->firstOrFail();
+        $this->assertSame('published', $publishedPost->status);
+        $this->assertGreaterThanOrEqual(800, $publishedPost->word_count);
+        $this->assertGreaterThanOrEqual(95, $publishedPost->seo_score);
+        $this->assertGreaterThan(0.0, $publishedPost->ai_estimated_cost_usd);
+
+        $draftResponse = $this->actingAs($admin)->post(route('studio.generate-ai'), [
+            'mode' => 'news',
+            'topic' => 'GTA VI Trailer 3 showcase announcement',
+            'status' => 'draft',
+        ]);
+
+        $draftPost = Post::query()->where('slug', 'rockstar-sets-gta-vi-trailer-3-showcase-window')->firstOrFail();
+        $draftResponse->assertRedirect(route('studio.edit', $draftPost));
+        $this->assertSame('draft', $draftPost->status);
+        $this->assertSame('NewsArticle', $draftPost->schema_type);
+        $this->assertSame(1, $draftPost->ai_search_queries);
+
+        $unauthorized = User::factory()->create();
+        $this->actingAs($unauthorized)
+            ->post(route('studio.generate-ai'), [
+                'mode' => 'evergreen',
+                'status' => 'draft',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_studio_dashboard_ai_generator_handles_missing_api_key_gracefully(): void
+    {
+        Config::set('services.gemini.api_key', '');
+        Http::fake();
+
+        $admin = User::query()->where('email', 'admin@gtavi.pro')->firstOrFail();
+
+        $response = $this->actingAs($admin)->post(route('studio.generate-ai'), [
+            'mode' => 'evergreen',
+            'topic' => 'Test missing key handling',
+            'status' => 'published',
+        ]);
+
+        $response->assertRedirect(route('studio.index'));
+        $response->assertSessionHasErrors('ai_generator');
+        Http::assertNothingSent();
+    }
+
+    public function test_editor_can_generate_ai_draft_directly_inside_studio_post_editor_livewire(): void
+    {
+        Config::set('services.gemini.api_key', 'test-gemini-key-123');
+        Config::set('services.gemini.model', 'gemini-flash-latest');
+
+        $editor = User::query()->where('email', 'editor@gtavi.pro')->firstOrFail();
+
+        $livewirePayload = $this->buildLongFormArticlePayload(
+            title: 'GTA VI Crowd Simulation & NPC Routines in Leonida',
+            slug: 'gta-vi-crowd-simulation-npc-routines-leonida',
+            focusKeyword: 'GTA VI crowd simulation',
+            categorySlug: 'trailer-rage-9-analysis',
+            schemaType: 'TechArticle',
+            verificationBadge: 'technical_projection',
+            targetParagraphWords: 910,
+        );
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'modelVersion' => 'gemini-2.5-flash',
+                'candidates' => [
+                    [
+                        'content' => [
+                            'parts' => [
+                                ['text' => json_encode($livewirePayload, JSON_THROW_ON_ERROR)],
+                            ],
+                        ],
+                    ],
+                ],
+                'usageMetadata' => [
+                    'promptTokenCount' => 980,
+                    'candidatesTokenCount' => 1520,
+                    'thoughtsTokenCount' => 180,
+                ],
+            ], 200),
+        ]);
+
+        $component = Livewire::actingAs($editor)
+            ->test(StudioPostEditor::class)
+            ->set('aiMode', 'evergreen')
+            ->set('aiTopic', 'GTA VI crowd simulation and RAGE 9 NPC schedules')
+            ->call('generateWithAi', 'draft')
+            ->assertHasNoErrors();
+
+        $generated = Post::query()->where('slug', 'gta-vi-crowd-simulation-npc-routines-leonida')->firstOrFail();
+
+        $component
+            ->assertSet('postId', $generated->id)
+            ->assertSet('title', $generated->title)
+            ->assertSet('slug', $generated->slug)
+            ->assertSet('status', 'draft');
+
+        $this->assertNotEmpty($component->get('contentBlocks'));
+        $this->assertStringContainsString('Gemini generated', (string) $component->get('saveBanner'));
+        $this->assertGreaterThanOrEqual(800, $generated->word_count);
+        $this->assertGreaterThanOrEqual(95, $generated->seo_score);
     }
 
     /**
