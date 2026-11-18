@@ -7,14 +7,14 @@ namespace App\Http\Controllers;
 use App\Http\Requests\GenerateAiPostRequest;
 use App\Http\Requests\StorePostRequest;
 use App\Http\Requests\UpdatePostRequest;
+use App\Jobs\GenerateGeminiArticleJob;
 use App\Models\Post;
-use App\Services\GeminiArticleService;
 use App\Services\PostService;
 use App\Services\SeoService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Log;
-use Throwable;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final readonly class StudiosController
 {
@@ -27,8 +27,13 @@ final readonly class StudiosController
             ->orderByDesc('updated_at')
             ->paginate(15);
 
+        $pendingAiJobsCount = Schema::hasTable('jobs')
+            ? DB::table('jobs')->where('payload', 'like', '%GenerateGeminiArticleJob%')->count()
+            : 0;
+
         return view('studio.index', [
             'posts' => $posts,
+            'pendingAiJobsCount' => $pendingAiJobsCount,
             'seoMeta' => $seo->buildPageMeta(
                 title: 'Vice Editorial Studio — WordPress-Class CMS | GTAVI.PRO',
                 description: 'Manage GTAVI.PRO block articles, live SEO audits, JSON-LD schema settings, and revision history.',
@@ -94,80 +99,37 @@ final readonly class StudiosController
             ->with('status', 'Dispatch updated and revision snapshot stored.');
     }
 
-    public function generateAi(GenerateAiPostRequest $request, GeminiArticleService $geminiArticleService): RedirectResponse
+    public function generateAi(GenerateAiPostRequest $request): RedirectResponse
     {
+        if (trim((string) config('services.gemini.api_key', '')) === '') {
+            return redirect()
+                ->route('studio.index')
+                ->withInput()
+                ->withErrors(['ai_generator' => 'GEMINI_API_KEY is not configured. Set GEMINI_API_KEY in .env before generating articles.']);
+        }
+
         $validated = $request->validated();
         $mode = (string) $validated['mode'];
         $status = (string) $validated['status'];
         $rawTopic = trim((string) ($validated['topic'] ?? ''));
         $topic = $rawTopic !== '' ? $rawTopic : null;
         $modes = $mode === 'both' ? ['news', 'evergreen'] : [$mode];
-        $createdPosts = [];
 
-        try {
-            foreach ($modes as $generationMode) {
-                $createdPosts[] = $geminiArticleService->generateAndCreatePost(
-                    mode: $generationMode,
-                    topicOverride: $topic,
-                    status: $status,
-                );
-            }
-        } catch (Throwable $exception) {
-            Log::error('Admin studio AI article generation failed.', [
-                'mode' => $mode,
-                'status' => $status,
-                'message' => $exception->getMessage(),
-            ]);
-
-            return redirect()
-                ->route('studio.index')
-                ->withInput()
-                ->withErrors(['ai_generator' => $exception->getMessage()]);
+        foreach ($modes as $generationMode) {
+            GenerateGeminiArticleJob::dispatch(
+                mode: $generationMode,
+                topicOverride: $topic,
+                status: $status,
+            );
         }
-
-        if (count($createdPosts) === 1 && $status === 'draft') {
-            $post = $createdPosts[0];
-            $costLabel = $post->formattedAiCost() !== null ? ' • Est. Cost: '.$post->formattedAiCost() : '';
-
-            return redirect()
-                ->route('studio.edit', $post)
-                ->with('status', sprintf(
-                    'Gemini generated draft "%s" (%d words, %d/100 SEO, %s tokens%s). Review & publish when ready.',
-                    $post->title,
-                    $post->word_count,
-                    $post->seo_score,
-                    number_format($post->totalAiTokens()),
-                    $costLabel,
-                ));
-        }
-
-        if (count($createdPosts) === 1) {
-            $post = $createdPosts[0];
-            $costLabel = $post->formattedAiCost() !== null ? ' • Est. Cost: '.$post->formattedAiCost() : '';
-
-            return redirect()
-                ->route('studio.index')
-                ->with('status', sprintf(
-                    'Gemini generated & published "%s" (%d words, %d/100 SEO, %s tokens%s).',
-                    $post->title,
-                    $post->word_count,
-                    $post->seo_score,
-                    number_format($post->totalAiTokens()),
-                    $costLabel,
-                ));
-        }
-
-        $totalTokens = array_sum(array_map(static fn (Post $post): int => $post->totalAiTokens(), $createdPosts));
-        $totalCostUsd = array_sum(array_map(static fn (Post $post): float => (float) ($post->ai_estimated_cost_usd ?? 0.0), $createdPosts));
 
         return redirect()
             ->route('studio.index')
             ->with('status', sprintf(
-                'Gemini generated %d %s articles (%s tokens • $%s USD est.).',
-                count($createdPosts),
-                $status,
-                number_format($totalTokens),
-                number_format($totalCostUsd, 4),
+                'Generating %d AI article(s) in the background (%s • %s). Refresh in ~30–60 seconds to view the new dispatch.',
+                count($modes),
+                strtoupper($mode),
+                strtoupper($status),
             ));
     }
 

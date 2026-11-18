@@ -65,6 +65,12 @@
         </div>
     @endif
 
+    @if (($pendingAiJobsCount ?? 0) > 0)
+        <div role="status" class="mt-6 rounded-md border border-amber-200 border-l-3 border-l-amber-500 bg-amber-50 px-5 py-3 text-sm font-semibold text-amber-900">
+            Generating {{ $pendingAiJobsCount }} AI article(s) in the background queue... Refresh this page in ~30&ndash;60 seconds.
+        </div>
+    @endif
+
     @can('create posts')
         <section aria-labelledby="studio-ai-generator-heading" class="mt-6 rounded-md border border-slate-200 border-l-3 border-l-[#2b124c] bg-white p-5 shadow-xs sm:p-6">
             <div class="flex flex-wrap items-start justify-between gap-3">

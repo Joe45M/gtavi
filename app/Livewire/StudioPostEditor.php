@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Livewire;
 
+use App\Jobs\GenerateGeminiArticleJob;
 use App\Models\Category;
 use App\Models\Post;
 use App\Models\PostRevision;
 use App\Services\ContentBlockService;
-use App\Services\GeminiArticleService;
 use App\Services\PostService;
 use App\Services\SeoService;
 use Illuminate\Contracts\View\View;
@@ -17,7 +17,6 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
-use Throwable;
 
 final class StudioPostEditor extends Component
 {
@@ -169,55 +168,26 @@ final class StudioPostEditor extends Component
             'aiTopic' => ['nullable', 'string', 'max:180'],
         ]);
 
-        $topic = trim((string) ($validated['aiTopic'] ?? ''));
-
-        try {
-            $generated = app(GeminiArticleService::class)->generateAndCreatePost(
-                mode: (string) $validated['aiMode'],
-                topicOverride: $topic !== '' ? $topic : null,
-                status: $status,
-            );
-        } catch (Throwable $exception) {
-            $this->addError('aiGenerator', $exception->getMessage());
+        if (trim((string) config('services.gemini.api_key', '')) === '') {
+            $this->addError('aiGenerator', 'GEMINI_API_KEY is not configured. Set GEMINI_API_KEY in .env before generating articles.');
 
             return;
         }
 
-        $generated->loadMissing(['tags']);
+        $topic = trim((string) ($validated['aiTopic'] ?? ''));
 
-        $this->postId = $generated->id;
-        $this->categoryId = $generated->category_id;
-        $this->title = $generated->title;
-        $this->slug = $generated->slug;
-        $this->subtitle = (string) ($generated->subtitle ?? '');
-        $this->excerpt = $generated->excerpt;
-        $this->featuredImageLabel = (string) ($generated->featured_image_label ?? '');
-        $this->featuredImageGradient = $generated->featured_image_gradient;
-        $this->authorName = $generated->author_name;
-        $this->authorRole = $generated->author_role;
-        $this->status = $generated->status;
-        $this->verificationBadge = $generated->verification_badge;
-        $this->isFeatured = $generated->is_featured;
-        $this->focusKeyword = (string) ($generated->focus_keyword ?? '');
-        $this->metaTitle = (string) ($generated->meta_title ?? '');
-        $this->metaDescription = (string) ($generated->meta_description ?? '');
-        $this->canonicalUrl = (string) ($generated->canonical_url ?? '');
-        $this->ogTitle = (string) ($generated->og_title ?? '');
-        $this->ogDescription = (string) ($generated->og_description ?? '');
-        $this->schemaType = $generated->schema_type;
-        $this->tagsInput = $generated->tags->pluck('name')->implode(', ');
-        $this->contentBlocks = $this->normalizeBlocks($generated->content_blocks ?? []);
+        GenerateGeminiArticleJob::dispatch(
+            mode: (string) $validated['aiMode'],
+            topicOverride: $topic !== '' ? $topic : null,
+            status: $status,
+        );
+
         $this->aiTopic = '';
         $this->resetValidation();
-
-        $costLabel = $generated->formattedAiCost() !== null ? ' • Est. Cost: '.$generated->formattedAiCost() : '';
         $this->saveBanner = sprintf(
-            'Gemini generated "%s" (%s • %d words • %d/100 SEO%s).',
-            $generated->title,
-            strtoupper($generated->status),
-            $generated->word_count,
-            $generated->seo_score,
-            $costLabel,
+            'Generating %s AI article (%s) in the background via Gemini. Visit the Admin Dashboard in ~30–60 seconds to open it.',
+            strtoupper((string) $validated['aiMode']),
+            strtoupper($status),
         );
     }
 
